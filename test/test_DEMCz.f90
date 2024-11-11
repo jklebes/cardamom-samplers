@@ -1,14 +1,14 @@
-module test_suite1
+module test_DEMCz
   use testdrive, only : new_unittest, unittest_type, error_type, check
   implicit none
   private
 
-  public:: collect_suite1
+  public:: collect_DEMCztests
 
 contains
 
 !> Collect all exported unit tests
-subroutine collect_suite1(testsuite)
+subroutine collect_DEMCztests(testsuite)
   !> Collection of tests
   type(unittest_type), allocatable, intent(out):: testsuite(:)
 
@@ -17,7 +17,7 @@ subroutine collect_suite1(testsuite)
     new_unittest("invalid", test_invalid, should_fail=.true.) &
     ]
 
-end subroutine collect_suite1
+end subroutine collect_DEMCztests
 
 subroutine test_valid(error)
   type(error_type), allocatable, intent(out):: error
@@ -29,4 +29,4 @@ subroutine test_invalid(error)
   ! ...
 end subroutine test_invalid
 
-end module test_suite1
+end module test_DEMCz

@@ -7,7 +7,9 @@ endif()
 # Unit testing
 set(
   tests
-  "suite1"
+  "common"
+  "MCMC"
+  "DEMCz"
 )
 set(
   test-srcs
@@ -25,7 +27,7 @@ add_executable(
 target_link_libraries(
   "${PROJECT_NAME}-tester"
   PRIVATE
-  "cardamom-lib"
+  "fDEMCz-lib"
   "test-drive::test-drive"
 )
 

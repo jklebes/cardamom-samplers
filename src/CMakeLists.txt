@@ -1,1 +1,4 @@
-add_library(fDE DE.f90)
+add_library(fDEMCz-lib
+              MHMCMC/MHMCMC_STRUCTURES.f90
+DEMCz.f90
+)

@@ -1,7 +1,9 @@
 program tester
   use, intrinsic:: iso_fortran_env, only : error_unit
   use testdrive, only : run_testsuite, new_testsuite, testsuite_type
-  use test_suite1, only : collect_suite1
+  use test_common, only : collect_commontests
+  use test_MCMC, only : collect_MCMCtests
+  use test_DEMCz, only : collect_DEMCztests
   implicit none
   integer:: stat, is
   type(testsuite_type), allocatable:: testsuites(:)
@@ -10,7 +12,9 @@ program tester
   stat = 0
 
   testsuites = [ &
-    new_testsuite("suite1", collect_suite1) &
+    new_testsuite("commontests", collect_commontests), &
+    new_testsuite("MCMCtests", collect_MCMCtests), &
+    new_testsuite("DEMCztests", collect_DEMCztests) &
      ]
 
   do is = 1, size(testsuites)
