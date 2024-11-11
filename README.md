@@ -1,5 +1,13 @@
 # fDE
+
+## About
 fortran differential evolution 
+
+Algorithm https://link.springer.com/article/10.1007/s11222-008-9104-9
+
+Implemented with reference to python - spotpy - demcz and R - BayesianTools - mcmcDEzs 
+
+Motivation : reimplemented in Fortran for use in CARDAMOM 
 
 ## Obtaining
 
