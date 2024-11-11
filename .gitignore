@@ -1,6 +1,6 @@
 # copy for reference from cardamom
-**/MHMCMC.f90
-**/MHMCMC*
+# **/MHMCMC.f90
+# **/MHMCMC*
 
 # Prerequisites
 *.d
