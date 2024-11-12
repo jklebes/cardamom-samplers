@@ -5,6 +5,8 @@ project(fDE VERSION 0.0.1
   LANGUAGES Fortran)
 enable_language(Fortran)
 
+set(PROJECT_NAME fDEMCz)
+
 add_subdirectory(src)
 
 #install(TARGETS fDE DESTINATION "lib")

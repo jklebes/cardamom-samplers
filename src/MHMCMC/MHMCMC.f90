@@ -212,7 +212,7 @@ contains
 
     ! checks whether the EDCs (combined with P0 not P0prior) have been met in the initial parameter set
     infini = 0d0
-    if (P0 == log(infini)) then
+    if (P0 == log(infini)) then !TODO is this log evaluating?
         write(*,*) "WARNING  ! P0 = ",P0, " - AP-MCMC will get stuck, if so please check initial conditions"
         stop
     endif

@@ -13,8 +13,7 @@ subroutine collect_commontests(testsuite)
   type(unittest_type), allocatable, intent(out):: testsuite(:)
 
   testsuite = [ &
-    new_unittest("valid", test_valid), &
-    new_unittest("invalid", test_invalid, should_fail=.true.) &
+    new_unittest("valid", test_valid)  &
     ]
 
 end subroutine collect_commontests
@@ -23,10 +22,5 @@ subroutine test_valid(error)
   type(error_type), allocatable, intent(out):: error
   ! ...
 end subroutine test_valid
-
-subroutine test_invalid(error)
-  type(error_type), allocatable, intent(out):: error
-  ! ...
-end subroutine test_invalid
 
 end module test_common

@@ -7,12 +7,10 @@ module DEMCz_module
    !!!!
    implicit none
 
-   private
+   public !expose all for testing
    real :: f = 0.8
    real :: gamma = 0.8
    integer :: k = 100 !TODO
-
-   public :: DEMCz ! main function
 
 !
 
@@ -120,9 +118,16 @@ contains
       vout = v1 + gamma*(v2 -v3) ! + noise e
    end subroutine
 
-   logical function metropolis_choice(new_likelihood, old_likelihood) ! Really should be in or shared with MCMC
-      real, intent(in) :: new_likelihood, old_likelihood   
-      metropolis_choice = .true.
+   !> Accept or reject 
+   !> First argument is new / proposed log(!) likelihood, 
+   !> second is old log likelihood
+   !> return logical 
+   logical function metropolis_choice(new_loglikelihood, old_loglikelihood) ! Really should be in or shared with MCMC
+      real, intent(in) :: new_loglikelihood, old_loglikelihood   
+      real r ! draw random number 0 to 1
+      call random_number(r)
+      ! l1/l2 > r  <=> logl1 - logl2 > log(r)
+      metropolis_choice = ((new_loglikelihood-old_loglikelihood) > log(r) )
    end function
 
    integer function random_int(N)
