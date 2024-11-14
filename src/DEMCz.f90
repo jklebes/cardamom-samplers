@@ -7,25 +7,43 @@ module DEMCz_module
    !!!!
    implicit none
 
-   public !expose all for testing
+   private 
+   ! Hold settings of the DEMCz run here, they are common to all
+   ! (possibly OMP parallel) chains and are set in DEMCz from 
+   ! TODO optional arguments or defaults
+   ! TODO package in DEMCzOPT struct
    real :: f = 0.8
    real :: gamma = 0.8
    integer :: k = 100 !TODO
+   integer :: N_chains = 12 !TODO
+   real :: burn_in_period
+   ! termination criteria:
+   integer :: MAX_ITER = 500 
+   real :: P_target 
 
+   public :: DEMCz
 !
 
 contains
    !
    !--------------------------------------------------------------------
    !
-   subroutine DEMCz(model_likelihood, MAX_ITER)
-    use MCMCOPT, only: PI
+   subroutine DEMCz(model_likelihood_write, model_likelihood, MCOUT)
+    use MCMCOPT, only: MCOUT, PI !we can assume this has been set to hold number, bounds of pars
+    ! Not the ideal way to pass settings in and results out 
     implicit none
       !------------------------------------------------------------------
       !
       ! interface for function
-
-
+       interface
+      subroutine model_likelihood_write(param_vector, ML)
+        use MCMCOPT, only: PI
+           implicit none
+           ! declare input variables
+           real, dimension(PI%npars), intent(in):: param_vector
+           ! output
+           real, intent(out):: ML
+      end subroutine model_likelihood_write
        interface
       subroutine model_likelihood(param_vector, ML)
         use MCMCOPT, only: PI
@@ -36,22 +54,21 @@ contains
            real, intent(out):: ML
       end subroutine model_likelihood
         end interface
-      ! function e : always gaussian
-      !
+      
 
       real, allocatable, dimension(:,:) :: PARS_current ! Matrix X , d x N
-      real, allocatable, dimension(:,:) :: PARS_history ! Matrix Z , d x final value of M
-
-      integer, intent(in) :: MAX_ITER
+      real, allocatable, dimension(:,:) :: PARS_history ! Matrix Z , d x final value of M 
+      
       integer :: npars 
-      integer :: N_chains = 12 !TOTO
-      integer :: N_Steps = 10000 ! TODO
-      integer :: len_history = 12 !TODO
 
-      real :: l0 = 0.0 ! TODO initalize parameters, likelihoods
+      ! TODO math constants
+      real :: loglikelihood0 = infini 
 
       integer :: i,j
+
       npars = PI%npars
+      !TODO check the function takes npars arguments 
+
       ! TODO put these arrays the right way around 
       allocate(PARS_current(npars, N_chains)) !TODO or each parallel worker could hold its own array, private
       ! but we need these to persist between parallel regions
@@ -61,6 +78,9 @@ contains
 !$    OMP PARALLEL DO
       do i=1, n_chains
          ! choose initial values
+         call init_random(PARS_current(:,i))
+         ! set pars from nor
+
          ! potential burnin steps
       end do
 !$    OMP END PARALLEL DO
@@ -72,14 +92,16 @@ contains
             call step_chain(PARS_current(i, :), l0, PARS_history, model_likelihood, npars, len_history)
          end do
          ! write to Z
-!$       OMP END PARALLEL DO !!Barrier implicit    
+!$       OMP END PARALLEL DO !!Barrier implicit ?
          ! check convergence
          ! Reorder for best chains ?  Then write to Z later.
       end do
 
    end subroutine
 
+   !> Evolve the state of one chain by k steps
    subroutine step_chain(X_i, l0, PARS_history, model_likelihood, npars, len_history)
+      USE DEMCzOPT, only: k
     real, dimension(:), intent(inout) :: X_i
     real, dimension(:), allocatable :: vector , prop_vector !internal: save previous state, proposed new state
     real, dimension(:,:), intent(in) :: PARS_history !the matrix Z so far, to read 2 rows from 
@@ -88,7 +110,7 @@ contains
     integer, intent(in) :: npars, len_history 
     integer :: R1, R2 !indices of 2 random rows (may be same)
     real :: rand
-    integer :: i
+    integer :: i, k
 
     interface
     subroutine model_likelihood(param_vector, ML)
@@ -101,9 +123,9 @@ contains
 
       do i=1, k 
       R1 = random_int(len_history)
-      R2 = random_int(len_history) ! and not equal R1
+      R2 = random_int(len_history) ! without replacement - possibly equal R1
       vector = X_i
-      call mutate(prop_vector, vector, PARS_history(R1,:), PARS_history(R2,:))
+      call step(prop_vector, vector, PARS_history(R1,:), PARS_history(R2,:))
       call model_likelihood(prop_vector, l)
       if (metropolis_Choice(l, l0)) then !We should have this in MCMC common
          X_i = prop_vector
@@ -112,7 +134,7 @@ contains
       end do
    end subroutine
 
-   subroutine mutate(vout, v1, v2, v3) 
+   subroutine step(vout, v1, v2, v3) 
     real, dimension(:), intent(out) :: vout
     real, dimension(:), intent(in) :: v1, v2, v3
       vout = v1 + gamma*(v2 -v3) ! + noise e
