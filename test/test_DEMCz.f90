@@ -55,6 +55,7 @@ subroutine test_MCO(error)
   type(error_type), allocatable, intent(out):: error
   !Having imported DEMCz_module, we should have a type(DEMCzOpt) 
   ! and access a module-level object holding default options
+  type(DEMCzOPT) :: options
 end subroutine
 
 ! TODO move to common
@@ -65,8 +66,7 @@ subroutine test_random_int(error)
   integer:: r
   r = random_int(2)
   !! should choose from (1, 2) (inclusive)
-  call check(error, r > 0)
-  call check(error, r < 3)
+  call check(error, r == 1 .or. r==2)
 end subroutine test_random_int
 
 subroutine test_metropolis_choice(error)
@@ -127,13 +127,18 @@ subroutine test_metropolis_stochastic(error)
     PI%parmax(1) = 110
     PI%parmin(2) = 2.5
     PI%parmin(2) = 7.5
-    
+   
+    ! single chain
     options%n_steps = 100
     options%MAXITER =1000
     options%N_chains = 1
     options%f = 0.8
     options%gamma = 0.8
 
+    call DEMCz(ll_normal, ll_normal, PI, Options, DEMCzOUT)
+
+    ! multi-chain
+    options%N_chains = 4
     call DEMCz(ll_normal, ll_normal, PI, Options, DEMCzOUT)
     
   end subroutine test_DEMCz_runs
