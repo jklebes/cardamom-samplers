@@ -1,7 +1,7 @@
 # fDE
 
 ## About
-fortran differential evolution 
+fortran differential evolution and other parallel samplers
 
 Algorithm https://link.springer.com/article/10.1007/s11222-008-9104-9
 
