@@ -7,7 +7,7 @@ module DEMCz_module
    !!!!
    implicit none
 
-   private 
+   public 
    ! Hold settings of the DEMCz run here, they are common to all
    ! (possibly OMP parallel) chains and are set in DEMCz from 
    ! TODO optional arguments or defaults
@@ -22,66 +22,94 @@ module DEMCz_module
    real :: P_target 
 
    public :: DEMCz
-!
+
+   type DEMCzOPT
+      integer :: MAXITER ! overall steps
+      integer :: n_steps !related to time for adapt
+      integer :: N_chains ! consider setting OMP env to something compatible
+      real :: f, gamma ! parameters of DE algorithm
+      real :: P_target ! termination criteria
+   end type DEMCzOPT
+
+   type PARINFO
+      integer :: n_pars
+      real, allocatable, dimension(:) :: parmin, parmax
+   end type PARINFO
+
+   type MCMC_OUTPUT
+      real :: bestll
+      real, allocatable, dimension(:) :: bestpars
+   end type MCMC_OUTPUT
 
 contains
    !
    !--------------------------------------------------------------------
    !
-   subroutine DEMCz(model_likelihood_write, model_likelihood, MCOUT)
-    use MCMCOPT, only: MCOUT, PI !we can assume this has been set to hold number, bounds of pars
-    ! Not the ideal way to pass settings in and results out 
+! PI and MCO structs come from model MODEL_LIKELIHOOD files, at the moment
+   subroutine DEMCz(model_likelihood_write, model_likelihood, PI, MCO, MCOUT)
     implicit none
       !------------------------------------------------------------------
       !
       ! interface for function
        interface
-      subroutine model_likelihood_write(param_vector, ML)
-        use MCMCOPT, only: PI
+      function model_likelihood_write(param_vector) result(ML) 
            implicit none
            ! declare input variables
-           real, dimension(PI%npars), intent(in):: param_vector
+           real, dimension(:), intent(in):: param_vector
            ! output
-           real, intent(out):: ML
-      end subroutine model_likelihood_write
+           real :: ML
+      end function model_likelihood_write
+        end interface
        interface
-      subroutine model_likelihood(param_vector, ML)
-        use MCMCOPT, only: PI
+      function model_likelihood(param_vector) result(ML)
            implicit none
-           ! declare input variables
-           real, dimension(PI%npars), intent(in):: param_vector
+           ! declare input variablesinteger
+           real, dimension(:), intent(in):: param_vector
            ! output
-           real, intent(out):: ML
-      end subroutine model_likelihood
+           real :: ML
+      end function model_likelihood
         end interface
       
 
+      !! inputs
+      type(PARINFO), intent(in) :: PI
+      type(DEMCzOPT), intent(in) :: MCO
+      type(MCMC_OUTPUT), intent(out) :: MCOUT
+
       real, allocatable, dimension(:,:) :: PARS_current ! Matrix X , d x N
+      ! and their current loglikelihood values
+      real, allocatable, dimension(:) :: l0
+      ! and their best likelihood values 
+      real, allocatable, dimension(:) :: l_best
+      real, allocatable, dimension(:,:) :: PARS_best 
+
       real, allocatable, dimension(:,:) :: PARS_history ! Matrix Z , d x final value of M 
       
       integer :: npars 
-
-      ! TODO math constants
-      real :: loglikelihood0 = infini 
-
+      integer :: nchains, nsteps, len_history
       integer :: i,j
 
-      npars = PI%npars
+      npars = PI%n_pars
+      nchains = MCO%N_chains
+      nsteps = MCO%N_chains
       !TODO check the function takes npars arguments 
 
       ! TODO put these arrays the right way around 
-      allocate(PARS_current(npars, N_chains)) !TODO or each parallel worker could hold its own array, private
+      allocate(PARS_current(npars, Nchains)) !TODO or each parallel worker could hold its own array, private
       ! but we need these to persist between parallel regions
-
-      allocate(PARS_history(npars, N_steps))
+      allocate(l0(nchains))
+      allocate(l_best(nchains))
+      allocate(PARS_best(npars,nchains))
+      allocate(PARS_history(npars, MCO%MAXITER))
 
 !$    OMP PARALLEL DO
       do i=1, n_chains
          ! choose initial values
-         call init_random(PARS_current(:,i))
+         call init_random(PI, PARS_current(:,i), l0(i))
          ! set pars from nor
 
          ! potential burnin steps
+         ! write first values to history matrix
       end do
 !$    OMP END PARALLEL DO
 
@@ -89,7 +117,8 @@ contains
       do i = 1, MAX_ITER
 !$       OMP PARALLEL DO
          do j=1, n_chains
-            call step_chain(PARS_current(i, :), l0, PARS_history, model_likelihood, npars, len_history)
+            call step_chain(PARS_current(i, :), l0(i), PARS_history, model_likelihood, & 
+            npars, len_history, nsteps)
          end do
          ! write to Z
 !$       OMP END PARALLEL DO !!Barrier implicit ?
@@ -99,9 +128,14 @@ contains
 
    end subroutine
 
+   subroutine init_random(PI, pars, ll)
+      type(PARINFO), intent(in) :: PI
+      real, dimension(:), intent(out) :: pars
+      real, intent(out) :: ll
+   end subroutine
+
    !> Evolve the state of one chain by k steps
-   subroutine step_chain(X_i, l0, PARS_history, model_likelihood, npars, len_history)
-      USE DEMCzOPT, only: k
+   subroutine step_chain(X_i, l0, PARS_history, model_likelihood, npars, len_history, n_steps)
     real, dimension(:), intent(inout) :: X_i
     real, dimension(:), allocatable :: vector , prop_vector !internal: save previous state, proposed new state
     real, dimension(:,:), intent(in) :: PARS_history !the matrix Z so far, to read 2 rows from 
@@ -110,23 +144,22 @@ contains
     integer, intent(in) :: npars, len_history 
     integer :: R1, R2 !indices of 2 random rows (may be same)
     real :: rand
-    integer :: i, k
+    integer :: i, n_steps
 
     interface
-    subroutine model_likelihood(param_vector, ML)
-      use MCMCOPT, only: PI
+    function model_likelihood(param_vector) result(ML)
          implicit none
-         real, dimension(PI%npars), intent(in):: param_vector !TODO kind double precision ?
-         real, intent(out):: ML
-    end subroutine model_likelihood
+         real, dimension(:), intent(in):: param_vector !TODO kind double precision ?
+         real :: ML
+    end function model_likelihood
       end interface
 
-      do i=1, k 
+      do i=1, n_steps
       R1 = random_int(len_history)
       R2 = random_int(len_history) ! without replacement - possibly equal R1
       vector = X_i
       call step(prop_vector, vector, PARS_history(R1,:), PARS_history(R2,:))
-      call model_likelihood(prop_vector, l)
+      l= model_likelihood(prop_vector)
       if (metropolis_Choice(l, l0)) then !We should have this in MCMC common
          X_i = prop_vector
          l0=l

@@ -2,6 +2,7 @@
 # **/MHMCMC.f90
 # **/MHMCMC*
 **/main.f90
+math.f90
 
 # Prerequisites
 *.d
@@ -39,3 +40,7 @@
 # Build
 build/
 build*/
+
+#autodoc 
+ford_doc/
+my_project.md

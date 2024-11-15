@@ -9,10 +9,13 @@ module test_DEMCz
 contains
 
 ! A test function E = A*(x-x_0)^2 + B*(y-y_0)^2 
-pure real function ll_normal(x, y) result(res)
-real, intent(in):: x, y
+pure real function ll_normal(pars) result(res)
+real, dimension(:), intent(in):: pars
+real :: x, y ! the pars to fit
 real :: x_0, y_0 ! The correct, energy/loglikelihood-minimizing answer will be x=x0, y=y0
 real :: A, B 
+x = pars(1)
+y = pars(2)
 x_0 = 5.1
 y_0 = 5.0
 A = 1.0
@@ -108,22 +111,30 @@ subroutine test_metropolis_stochastic(error)
   end subroutine test_metropolis_stochastic
 
   subroutine test_DEMCz_runs(error)
-    use DEMCz_module, only: DEMCz
+    use DEMCz_module, only: DEMCz, PARINFO  
     implicit none
     type(error_type), allocatable, intent(out):: error
     ! test the main DEMCz function just runs when given a function
     ! it returns / modifies no info ; it writes to file
 
-
+    type(PARINFO) :: PI
+    type(DEMCzOPT) :: options
+    type(MCMC_OUTPUT) :: DEMCzOUT 
 
     ! A struct with parameter limits
-    PI%npars = 2
+    PI%n_pars = 2
     PI%parmin(1) = -3.0
     PI%parmax(1) = 110
     PI%parmin(2) = 2.5
     PI%parmin(2) = 7.5
+    
+    options%n_steps = 100
+    options%MAXITER =1000
+    options%N_chains = 1
+    options%f = 0.8
+    options%gamma = 0.8
 
-    call DEMCz(ll_normal, ll_normal, PI, MCO, DEMCzOUT)
+    call DEMCz(ll_normal, ll_normal, PI, Options, DEMCzOUT)
     
   end subroutine test_DEMCz_runs
 

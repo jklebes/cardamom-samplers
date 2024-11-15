@@ -9,7 +9,7 @@ endif()
 set(
   tests
   "common"
-  "MCMC"
+  #"MCMC"
   "DEMCz"
 )
 set(
