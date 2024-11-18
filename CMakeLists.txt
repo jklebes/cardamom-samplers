@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.28)
+cmake_minimum_required(VERSION 3.25)
 
 project(fDE VERSION 0.0.1
 	DESCRIPTION "fortran implementation of differential evolution" 

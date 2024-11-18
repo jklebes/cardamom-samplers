@@ -5,56 +5,67 @@ module DEMCz_module
    ! jklebes 2024
    ! Implementing ter Braak & Vrugt 2008
    !!!!
-   implicit none
 
+   implicit none
+   
+   ! TODO  expose for testing?
    public 
 
    public :: DEMCz
 
+   !> A collection of input options to the DEMCz sampler run
+   !> contains default values 
    type DEMCzOPT
-      integer :: MAXITER ! overall steps
-      integer :: n_steps !related to time for adapt
+      integer :: MAXITER ! overall steps, if convergence not reached
+      integer :: n_steps ! steps per independent sampling period
       integer :: N_chains ! consider setting OMP env to something compatible
-      real :: f = 0.8 !TODO names, default values
-      real ::  gamma = 0.8 ! parameters of DE algorithm
+      real :: differential_weight = 0.8 ! differential weight f, [0,2]
+      real :: crossover_probability = 0.9 ! crossover probability gamma , [0,1]
       real :: P_target ! termination criteria
    end type DEMCzOPT
 
+   !> A collection of info about the model's parameters
+   !> n_pars and min, max bounds as two arrays
+   !> Closely related to model fct; model must take this number 
+   !> and type of paramters
+   !> Unlike in previous versions, intended to be intent(in) only
+   !> TODO we could bundle this in a type with the function
    type PARINFO
       integer :: n_pars
       real, allocatable, dimension(:) :: parmin, parmax
    end type PARINFO
 
+   !> Collection of info for output of the sampling rnu
+   !> Note output is mainly via file writing
    type MCMC_OUTPUT
       real :: bestll
       real, allocatable, dimension(:) :: bestpars
    end type MCMC_OUTPUT
 
 contains
-   !
-   !--------------------------------------------------------------------
-   !
-! PI and MCO structs come from model MODEL_LIKELIHOOD files, at the moment
+
+   !> Main DEMCz sampler subroutine
+   !> Write all OMP parallelization at this level only
+   !> IN: @todo model_likelihood_write alternative loglikelihood for writing to file
+   !> IN: model_loglikelihood a function parameters (array) -> loglikelihood (real)
+   !> IN: PI type(ParInfo) collection of parameter bounds
+   !> IN: OPT type(DEMCz) collection of sampling options
+   !> OUT: MCOUT type(DEMCzOUT) collection of results
+   !> Also writes history to file/output stream and progress to console.  
    subroutine DEMCz(model_likelihood_write, model_likelihood, PI, MCO, MCOUT)
     implicit none
-      !------------------------------------------------------------------
-      !
-      ! interface for function
+      
        interface
       function model_likelihood_write(param_vector) result(ML) 
            implicit none
-           ! declare input variables
            real, dimension(:), intent(in):: param_vector
-           ! output
            real :: ML
       end function model_likelihood_write
         end interface
        interface
       function model_likelihood(param_vector) result(ML)
            implicit none
-           ! declare input variablesinteger
            real, dimension(:), intent(in):: param_vector
-           ! output
            real :: ML
       end function model_likelihood
         end interface
@@ -65,14 +76,16 @@ contains
       type(DEMCzOPT), intent(in) :: MCO
       type(MCMC_OUTPUT), intent(out) :: MCOUT
 
-      real, allocatable, dimension(:,:) :: PARS_current ! Matrix X , d x N
+      !> Matrix X , npars x nchains, holding current state of the n chains
+      real, allocatable, dimension(:,:) :: PARS_current 
       ! and their current loglikelihood values
       real, allocatable, dimension(:) :: l0
       ! and their best likelihood values 
       real, allocatable, dimension(:) :: l_best
       real, allocatable, dimension(:,:) :: PARS_best 
-
-      real, allocatable, dimension(:,:) :: PARS_history ! Matrix Z , d x final value of M 
+ 
+      !> history Matrix Z , npars x maxiter 
+      real, allocatable, dimension(:,:) :: PARS_history
       
       integer :: npars 
       integer :: nchains, nsteps, len_history, MAXITER
@@ -84,8 +97,7 @@ contains
       MAXITER = MCO%MAXITER
       !TODO check the function takes npars arguments 
 
-      ! TODO put these arrays the right way around 
-      allocate(PARS_current(npars, Nchains)) !TODO or each parallel worker could hold its own array, private
+      allocate(PARS_current(npars, Nchains))
       ! but we need these to persist between parallel regions
       allocate(l0(nchains))
       allocate(l_best(nchains))
@@ -96,37 +108,48 @@ contains
       len_history = 0
 
 !$    OMP PARALLEL DO
-      do i=1, nchains
+      do j=1, nchains
          ! choose initial values
-         call init_random(PI, PARS_current(:,i), l0(i))
-         ! set pars from nor
+         call init_random(PI, PARS_current(:,j), l0(j))
 
          ! potential burnin steps
          ! write first values to history matrix
-
+         PARS_history(:,j) = PARS_current(:,j)
       end do
 !$    OMP END PARALLEL DO
-      len_history = len_history+n_chains
+      len_history = len_history+nchains
 
-      do i = 2, MAX_ITER
+      do i = 2, MAXITER
 !$       OMP PARALLEL DO
-         do j=1, n_chains
+         do j=1, nchains
             call step_chain(PARS_current(i, :), l0(i), PARS_history, model_likelihood, & 
             npars, len_history, nsteps)
          end do
          ! write to Z
+         PARS_history(:,len_history+j) = PARS_current(:,i)
 !$       OMP END PARALLEL DO !!Barrier implicit ?
-      len_history = len_history+n_chains
+      ! increment length M (filled so far) of Z
+      len_history = len_history+nchains
          ! check convergence
+
          ! Reorder for best chains ?  Then write to Z later.
       end do
 
    end subroutine
 
-   subroutine init_random(PI, pars, ll)
+   !> Initialize the chain's state with random values from 
+   !> parameter ranges.
+   !> This is not the best initialization; all later sampling is 
+   !> bounded by min/max of the chains' random initial
+   !> values, plus noise.
+   !> Use a latin hypercube init ater.
+   subroutine init_random(PI, norpars, ll)
       type(PARINFO), intent(in) :: PI
-      real, dimension(:), intent(out) :: pars
+      real, dimension(:), intent(out) :: norpars
       real, intent(out) :: ll
+      do i = 1, PI%npars
+         call random_number(norpars(i)) 
+      end do
    end subroutine
 
    !> Evolve the state of one chain by k steps
@@ -166,6 +189,9 @@ contains
     real, dimension(:), intent(out) :: vout
     real, dimension(:), intent(in) :: v1, v2, v3
     real, intent(in) :: gamma, f
+    ! TODO 
+    ! R1, R2 non-identical random indices
+    ! mask arrays
       vout = v1 + gamma*(v2 -v3) ! + noise e
    end subroutine
 
