@@ -132,14 +132,13 @@ subroutine test_metropolis_stochastic(error)
     options%n_steps = 100
     options%MAXITER =1000
     options%N_chains = 1
-    options%f = 0.8
-    options%gamma = 0.8
+    options%differential_weight = 0.8
 
-    call DEMCz(ll_normal, ll_normal, PI, Options, DEMCzOUT)
+    call DEMCz(ll_normal, PI, Options, DEMCzOUT)
 
     ! multi-chain
     options%N_chains = 4
-    call DEMCz(ll_normal, ll_normal, PI, Options, DEMCzOUT)
+    call DEMCz(ll_normal, PI, Options, DEMCzOUT)
     
   end subroutine test_DEMCz_runs
 

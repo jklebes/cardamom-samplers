@@ -34,9 +34,11 @@ ctest .
 ```
 
 ## Using
-It's a library.  It has no main exectuable.  
+It's a library.  It has no main exectuable other than the test/ examples.
 
-It exposes functions:
+Use the samplers in a fortran program.
+
+It exposes functions ``MHMCMC``, ``DEMCz``:
 
 ### Example
 ```fortran

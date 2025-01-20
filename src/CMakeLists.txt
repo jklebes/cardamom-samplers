@@ -1,8 +1,10 @@
 
 add_library(fDEMCz-lib
               math.f90
-              #MHMCMC/MHMCMC_STRUCTURES.f90
+              samplers_io/cardamom_io.f90
+              samplers_shared.f90
               DEMCz.f90
+              MHMCMC/MHMCMC.f90
 )
 
 set_target_properties(
