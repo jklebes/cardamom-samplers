@@ -14,7 +14,7 @@ module DEMCz_module
    !  and DEMCzOPT - options, containing as many or few of the fields as needed, the rest default to the 
    !                 default values in type definiton here
    !  Create an object of type MCMC_OUTPUT to write reults to.
-   !  Create a real function loglikelihood taking a vector of n_pars (same as in PARINFO) parameters and 
+   !  Create a double precision function loglikelihood taking a vector of n_pars (same as in PARINFO) parameters and 
    !                 returning rel::loglikelihood.
    !  (not implemented yet) Optionally set OMP_NUM_THREADS
    !  Call subroutine DEMCz(fct, parinfo, demczopt, mcmcout) 
@@ -30,7 +30,7 @@ module DEMCz_module
    ! TODO add file writing
 
    !> Settings for this run, as module data
-   real :: differential_weight
+   double precision :: differential_weight
 
    !> A collection of input options to the DEMCz sampler run
    !> contains default values 
@@ -38,17 +38,17 @@ module DEMCz_module
       integer:: MAXITER  ! overall steps, if convergence not reached
       integer:: n_steps  ! steps per independent sampling period
       integer:: N_chains  ! consider setting OMP env to something compatible
-      real:: differential_weight = 0.8  ! differential weight gamma, [0, 2]
-      real:: crossover_probability = 0.9  ! crossover probability CR, [0, 1]
-      real:: P_target  ! termination criteria
+      double precision:: differential_weight = 0.8  ! differential weight gamma, [0, 2]
+      double precision:: crossover_probability = 0.9  ! crossover probability CR, [0, 1]
+      double precision:: P_target  ! termination criteria
    end type DEMCzOPT
 
 
    !> Collection of info for output of the sampling run
    !> Note output is mainly via file writing
    type MCMC_OUTPUT
-      real:: bestll
-      real, allocatable, dimension(:):: bestpars
+      double precision:: bestll
+      double precision, allocatable, dimension(:):: bestpars
    end type MCMC_OUTPUT
 
 contains
@@ -74,8 +74,8 @@ contains
       interface
       function model_likelihood(param_vector) result(ML)
            implicit none
-           real, dimension(:), intent(in):: param_vector
-           real:: ML
+           double precision, dimension(:), intent(in):: param_vector
+           double precision:: ML
       end function model_likelihood
       end interface
       
@@ -86,15 +86,15 @@ contains
       procedure(model_likelihood), pointer :: model_likelihood_write
 
       !> Matrix X, (npars x nchains), holding current state of the n chains
-      real, allocatable, dimension(:,:):: PARS_current 
+      double precision, allocatable, dimension(:,:):: PARS_current 
       ! and their current loglikelihood values
-      real, allocatable, dimension(:):: l0 
+      double precision, allocatable, dimension(:):: l0 
       ! and their best likelihood values and best pars so far
-      real, allocatable, dimension(:):: l_best
-      real, allocatable, dimension(:,:):: PARS_best 
+      double precision, allocatable, dimension(:):: l_best
+      double precision, allocatable, dimension(:,:):: PARS_best 
  
       !> history Matrix Z, (npars x (nchains * maxiter))
-      real, allocatable, dimension(:,:):: PARS_history
+      double precision, allocatable, dimension(:,:):: PARS_history
 
       
       integer:: npars, nchains, MAXITER , Ksteps
@@ -195,7 +195,7 @@ contains
    !> For each parameter
    subroutine init_random(npars, norpars)
       integer , intent(in) :: npars
-      real, dimension(:), intent(out):: norpars
+      double precision, dimension(:), intent(out):: norpars
       integer :: i
       do i = 1, npars
          call random_number(norpars(i)) 
@@ -208,23 +208,23 @@ contains
    subroutine step_chain(X_i, l0, model_likelihood, & 
       npars, PARS_history, len_history)
      integer, intent(in):: npars ! number of pars
-    real, dimension(:), intent(inout):: X_i ! current state of the chain ; normalized values of all pars
-    real, dimension(:), allocatable:: previous_vector, proposed_vector  ! internal: save previous state, proposed new state
-    real, dimension(:,:), intent(in):: PARS_history  ! the matrix Z so far, to read 2 rows from
+    double precision, dimension(:), intent(inout):: X_i ! current state of the chain ; normalized values of all pars
+    double precision, dimension(:), allocatable:: previous_vector, proposed_vector  ! internal: save previous state, proposed new state
+    double precision, dimension(:,:), intent(in):: PARS_history  ! the matrix Z so far, to read 2 rows from
     integer, intent(in) :: len_history ! length to which Z is filled
-    real, intent(inout):: l0  ! likelihood of previous accepted params
-    real             :: l  ! likelihood of proposed values
+    double precision, intent(inout):: l0  ! likelihood of previous accepted params
+    double precision             :: l  ! likelihood of proposed values
     
     integer:: R1, R2  ! indices of 2 random rows 
-    real:: rand
+    double precision:: rand
     integer:: i ! counters
 
     ! the function, vector of normalized par values -> loglikelihood
     interface
     function model_likelihood(param_vector) result(ML)
          implicit none
-         real, dimension(:), intent(in):: param_vector  ! TODO kind double precision ?
-         real:: ML
+         double precision, dimension(:), intent(in):: param_vector  ! TODO kind double precision ?
+         double precision:: ML
     end function model_likelihood
       end interface
 
@@ -245,27 +245,17 @@ contains
    ! Generate new proposed state from currect state and history
    ! ter Braak & Vrugt eq 2
    subroutine step(vout, v1, v2, v3) 
-    real, dimension(:), intent(out):: vout
-    real, dimension(:), intent(in):: v1, v2, v3
+    double precision, dimension(:), intent(out):: vout
+    double precision, dimension(:), intent(in):: v1, v2, v3
     ! get differential_weight, corssover_probability from module data
       vout = v1+differential_weight*(v2-v3) ! TODO + noise e
    end subroutine
 
-   !> Accept or reject 
-   !> First argument is new/proposed log(!)likelihood, 
-   !> second is old log likelihood
-   !> return logical 
-   logical function metropolis_choice(new_loglikelihood, old_loglikelihood)  ! Really should be in or shared with MCMC
-      real, intent(in):: new_loglikelihood, old_loglikelihood   
-      real r  ! draw random number 0 to 1
-      call random_number(r)
-      ! l1/l2 > r  <=> logl1-logl2 > log(r)
-      metropolis_choice = ((new_loglikelihood-old_loglikelihood) > log(r) )
-   end function
+
 
    integer function random_int(N)
       integer, intent(in):: N
-      real:: r
+      double precision:: r
       call random_number(r)
       random_int = floor(N*r)+1
    end function
