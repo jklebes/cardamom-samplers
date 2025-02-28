@@ -1,4 +1,4 @@
-# fDE
+# cardamom-samplers
 
 ## About
 fortran differential evolution and other parallel samplers
@@ -18,7 +18,7 @@ TODO
 git clone
 
 ```
-cd fDE
+cd cardamom-samplers
 mkdir build
 cd build
 cmake ..
@@ -41,6 +41,3 @@ Use the samplers in a fortran program.
 It exposes functions ``MHMCMC``, ``DEMCz``:
 
 ### Example
-```fortran
-use fDE
-```

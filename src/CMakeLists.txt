@@ -1,5 +1,5 @@
 
-add_library(fDEMCz-lib
+add_library(cardamom-samplers-lib
               math.f90
               random_uniform.f90
               samplers_io/cardamom_io.f90

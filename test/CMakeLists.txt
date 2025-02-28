@@ -29,7 +29,7 @@ add_executable(
 target_link_libraries(
   "${PROJECT_NAME}-tester"
   PRIVATE
-  "fDEMCz-lib"
+  "cardamom-samplers"
   "test-drive::test-drive"
 )
 
