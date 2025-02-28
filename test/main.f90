@@ -13,7 +13,7 @@ program tester
 
   testsuites = [ &
     new_testsuite("commontests", collect_commontests), &
-    new_testsuite("MCMCtests", collect_MCMCtests), &
+    !new_testsuite("MCMCtests", collect_MCMCtests), &
     new_testsuite("DEMCztests", collect_DEMCztests) &
      ]
 

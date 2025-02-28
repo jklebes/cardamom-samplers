@@ -1,7 +1,7 @@
 
 add_library(fDEMCz-lib
-              random_uniform.f90
               math.f90
+              random_uniform.f90
               samplers_io/cardamom_io.f90
               samplers_shared.f90
               DEMCz.f90

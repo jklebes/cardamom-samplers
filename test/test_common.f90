@@ -1,10 +1,12 @@
 module test_common
   use testdrive, only : new_unittest, unittest_type, error_type, check
-  !use common
+  use samplers_shared
   implicit none
   private
 
   public:: collect_commontests
+
+  integer, parameter :: dp = kind(0.0d0)
 
 contains
 
@@ -14,18 +16,20 @@ subroutine collect_commontests(testsuite)
   type(unittest_type), allocatable, intent(out):: testsuite(:)
 
   testsuite = [ &
-    new_unittest("infini", test_infini)  &
+    new_unittest("infini", test_is_infinity)  &
     ]
 
 end subroutine collect_commontests
 
-subroutine test_infini(error)
+subroutine test_is_infinity(error)
   type(error_type), allocatable, intent(out):: error
-  ! we have a constant infini = log(0d0), 
-  ! And I expect it was set and 
-  ! holds a big number (not error, NaN, underflow, etc)
-  ! TODO compare against size of e?? 
-  !check(error, infini > 1e10)
-end subroutine test_infini
+  double precision :: P, log_P
+  P = 0.0_dp
+  log_P = log(P) 
+  call check(error, is_infinity(log_P), .true.) 
+  P = 0.01_dp
+  log_P = log(P) 
+  call check(error, is_infinity(log_P), .false.) 
+end subroutine test_is_infinity
 
 end module test_common

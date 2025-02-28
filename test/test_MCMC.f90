@@ -23,6 +23,7 @@ subroutine test_valid(error)
   ! ...
 end subroutine test_valid
 
+
 !TODO move to common/math test
 subroutine test_random_multivariate(error)
   type(error_type), allocatable, intent(out):: error
@@ -45,7 +46,7 @@ end subroutine test_random_normal
 
 subroutine test_step(error)
   type(error_type), allocatable, intent(out):: error
-  ! step() takes vector or pars, modifies it
+  ! step() takes vector of pars, modifies it
 
 end subroutine test_step
 

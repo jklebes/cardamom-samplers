@@ -72,12 +72,13 @@ contains
 
       ! the function to minimize ! TODO change name to loglikelihood everywehere
       interface
-      function model_likelihood(param_vector) result(ML)
-           implicit none
-           double precision, dimension(:), intent(in):: param_vector
-           double precision:: ML
-      end function model_likelihood
-      end interface
+    subroutine model_likelihood(param_vector, n, ML)
+         implicit none
+         double precision, dimension(:), intent(in):: param_vector
+         integer, intent(in) :: n
+         double precision , intent(out):: ML
+    end subroutine model_likelihood
+    end interface
       
       ! optionally give a second function with same shape as model_likelihood , 
       ! for writing to file;
@@ -145,7 +146,7 @@ contains
          ! TODO better function for initial state : latin square
          call init_random(npars, PARS_current(:,j))
          ! also set the loglikelihoof of the state generated
-         l0(j) = model_likelihood(PARS_current(:,j))
+         call model_likelihood(PARS_current(:,j), npars, l0(j))
 
          ! potential burnin steps
          ! ... TODO
@@ -220,13 +221,15 @@ contains
     integer:: i ! counters
 
     ! the function, vector of normalized par values -> loglikelihood
+
     interface
-    function model_likelihood(param_vector) result(ML)
+    subroutine model_likelihood(param_vector, n, ML)
          implicit none
-         double precision, dimension(:), intent(in):: param_vector  ! TODO kind double precision ?
-         double precision:: ML
-    end function model_likelihood
-      end interface
+         double precision, dimension(:), intent(in):: param_vector
+         integer, intent(in) :: n
+         double precision , intent(out):: ML
+    end subroutine model_likelihood
+    end interface
 
       R1 = random_int(len_history)
       R2 = random_int(len_history)  
@@ -235,7 +238,7 @@ contains
       end do
       previous_vector = X_i
       call step(proposed_vector, previous_vector , PARS_history(R1, :), PARS_history(R2, :))
-      l = model_likelihood(proposed_vector)
+      call model_likelihood(proposed_vector, npars, l)
       if (metropolis_choice(l, l0)) then  ! We should have this in MCMC common
          X_i = proposed_vector
          l0 = l

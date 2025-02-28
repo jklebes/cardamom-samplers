@@ -6,14 +6,18 @@ module test_DEMCz
 
   public:: collect_DEMCztests
 
+  integer, parameter :: dp = kind(0.0d0)
+
 contains
 
 ! A test function E = A*(x-x_0)^2 + B*(y-y_0)^2 
-pure real function ll_normal(pars) result(res)
-real, dimension(:), intent(in):: pars
-real :: x, y ! the pars to fit
-real :: x_0, y_0 ! The correct, energy/loglikelihood-minimizing answer will be x=x0, y=y0
-real :: A, B 
+subroutine ll_normal(pars, npars, res)
+  integer, intent(in) :: npars 
+double precision, dimension(:), intent(in):: pars
+double precision, intent(out) :: res
+double precision :: x, y ! the pars to fit
+double precision :: x_0, y_0 ! The correct, energy/loglikelihood-minimizing answer will be x=x0, y=y0
+double precision :: A, B 
 x = pars(1)
 y = pars(2)
 x_0 = 5.1
@@ -22,7 +26,7 @@ A = 1.0
 B = 1.6 ! covariance matrix expected to have inversely proportional entries on diagonal
 ! and zeros on off-diagonal for x-y correlation 
 res = A*(x-x_0)**2 + B*(y-y_0)**2
-end function
+end subroutine
 
 !> Collect all exported unit tests
 subroutine collect_DEMCztests(testsuite)
@@ -77,9 +81,10 @@ subroutine test_metropolis_choice(error)
   implicit none
   type(error_type), allocatable, intent(out):: error
   ! certain acceptance of state with probability 1 vs 0
-  call check(error, metropolis_choice(log(1.0), log(1e-15)),.true. )
+  call check(error, metropolis_choice(log(1.0_dp), log(1e-15_dp)),.true. )
   ! certain rejection of state with probability 0 vs 1
-  call check(error, metropolis_choice(log(1e-15), log(1.0)),.false. )
+  call check(error, metropolis_choice(log(1e-15_dp), log(1.0_dp)),.false. )
+
 end subroutine test_metropolis_choice
 
 subroutine test_metropolis_stochastic(error)
@@ -89,7 +94,7 @@ subroutine test_metropolis_stochastic(error)
     use DEMCz_module, only: metropolis_choice
     implicit none
     type(error_type), allocatable, intent(out):: error
-    real :: new_loglikelihood, old_loglikelihood, accept_ratio
+    double precision :: new_loglikelihood, old_loglikelihood, accept_ratio
     integer :: i, N, accept_count
     ! Something with a likelihood l1 = 1/2 l2 should be acceped
     ! 50% of the time.  
