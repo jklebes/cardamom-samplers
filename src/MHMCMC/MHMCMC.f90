@@ -1,4 +1,4 @@
-module MHMCMC_MODULE
+module MHMCMC
 
   !!!!!!!!!!!
   ! Authorship contributions
@@ -24,43 +24,45 @@ module MHMCMC_MODULE
   ! Roberts and Rosenthal (2009), Examples of Adaptive MCMC, J. Comp. Graph. Stat. 18:349-367
 
    ! On normalized parameters: 
-   ! "raw" values, as convenient for loglikelihood calculation and file writing,
+   ! "raw" values, as convenient for loglikelihood calculation and file writing, 
    ! are the default  For function arguments, internal saved data.  Parameters
    ! are converted to normalized values as needed by adaptive statistics functions.  History matrix 
    !  PARSALL and covariance matrix work refer to the normalized parameter space.
    !
    ! How to use this sampler:
    !  Create an object of type PARINFO : number and bounds of parameters 
-   !  and DEMCzOPT - options, containing as many or few of the fields as needed, the rest default to the 
+   !  and DEMCzOPT-options, containing as many or few of the fields as needed, the rest default to the 
    !                 default values in type definiton here
    !  Create an object of type MCMC_OUTPUT to write reults to.
    !  Create a real function loglikelihood taking a vector of n_pars (same as in PARINFO) parameters and 
-   !                 returning rel::loglikelihood.
+   !                 returning rel:: loglikelihood.
    !  (not implemented yet) Optionally set OMP_NUM_THREADS
    !  Call subroutine DEMCz(fct, parinfo, mcopt, mcmcout) 
 
 use samplers_shared, only: PARINFO
+use cardamom_io
 
 implicit none
 
-! make all private
-private
-
-! specify what can be seen
-public:: MHMCMC
+public
 
 !> A collection of input options to the DEMCz sampler run
 !> contains default values 
-type MHMCMCOPT
-integer:: MAXITER  ! overall steps, if convergence not reached
-integer:: n_steps  ! steps per "local" sampling period, between adaptation steps
-integer:: N_chains  ! consider setting OMP env to something compatible
-integer :: n_write 
-integer :: nprint
+type MCMC_OPTIONS
+integer:: MAXITER =10000 ! overall steps, if convergence not reached
+integer:: n_steps  =1000 ! steps per "local" sampling period, between adaptation steps
+integer:: N_chains =1 ! consider setting OMP env to something compatible
+integer:: n_write =1000
+integer:: nprint = 1000
 real:: P_target  ! termination criteria 
+! file names
+character(350) :: parfilename = "parout.txt"
+character(350) :: stepfilename = "stepout.txt"
+character(350) ::  covfilename = "covout.txt"
+character(350) :: covinfofilename = "covinfoout.txt"
 ! Adaptive !!
 ! setting for adaptive AP-MCMC step size
-double precision :: par_minstepsize = 0.001d0 & ! 0.0005 -> 0.001 -> 0.01 -> 0.1 -> 0.005
+double precision:: par_minstepsize = 0.001d0 & ! 0.0005 -> 0.001 -> 0.01 -> 0.1 -> 0.005
                               ,par_maxstepsize = 0.01d0  &
                               ,par_initstepsize = 0.005d0
 double precision:: beta = 0.05d0  ! weighting for gaussian step in multivariate proposals
@@ -73,31 +75,31 @@ double precision:: N_before_mv_target, & !
 !! step
 ! Is current proposal multivariate or not?
 logical:: multivariate_proposal = .false.
-real :: fadapt ! TODO ?? misc variables from here
-real :: nout 
-logical :: append
-logical :: use_multivariate
-logical :: restart
-end type MHMCMCOPT
+real:: fadapt  ! TODO ?? misc variables from here
+real:: nout 
+logical:: append
+logical:: use_multivariate
+logical:: restart
+end type MCMC_OPTIONS
 
 
 !> Collection of info for output of the sampling run
 !> Note output is mainly via file writing
 type MCMC_OUTPUT
-real:: bestll
-real, allocatable, dimension(:):: bestpars, pars_final
-integer :: complete !TODO logical
-integer :: nos_iterations
+real:: bestll, ll
+real, allocatable, dimension(:):: bestpars, pars
+integer:: complete  ! TODO logical
+integer:: nos_iterations
 end type MCMC_OUTPUT
 
 !> Collect ongoing statistics (means, covariance matrix, etc) for each chain
 type MCSTATS
-double precision :: Nparvar, Nparvar_local 
-double precision, allocatable, dimension(:) :: parvar, meanpar
-double precision, allocatable , dimension(:,:) :: covariance
-logical :: cov = .false. ! Does the covariance matrix exist yet?
-logical :: use_multivariate
-logical :: multivariate_proposal
+double precision:: Nparvar, Nparvar_local 
+double precision, allocatable, dimension(:):: parvar, meanpar
+double precision, allocatable, dimension(:,:):: covariance
+logical:: cov = .false. ! Does the covariance matrix exist yet?
+logical:: use_multivariate
+logical:: multivariate_proposal
 end type
 
 
@@ -105,7 +107,7 @@ contains
   !
   !--------------------------------------------------------------------
   !
-  subroutine MHMCMC( model_likelihood, PI, MCO, MCOUT, model_likelihood_write_in, restart, MCOUT_prev, nchains)
+  subroutine run_parallel_mcmc( model_likelihood, PI, MCO, MCOUT, model_likelihood_write_in, restart_in, MCOUT_prev, nchains)
 
     implicit none
 
@@ -140,28 +142,29 @@ contains
 
       !! input and output structs
       type(PARINFO), intent(in):: PI
-      type(MHMCMCOPT), intent(in):: MCO
+      type(MCMC_OPTIONS), intent(in):: MCO
       type(MCMC_OUTPUT), intent(out):: MCOUT
 
-      logical, optional, intent(inout) :: restart !is it a restart ? (i.e. start from data in MCOUT instead of initializing new)
+      logical, optional, intent(in):: restart_in  ! is it a restart ? (i.e. start from data in MCOUT instead of initializing new)
+      logical:: restart
       type(MCMC_OUTPUT), optional, intent(in):: MCOUT_prev
-      integer, optional :: nchains
+      integer, optional:: nchains
 
-      ! the function to minimize ! TODO change name to loglikelihood everywhere
+      ! the function to minimize  ! TODO change name to loglikelihood everywhere
       ! Completely agnostic, samples any functions pars -> loglikelihood
       interface
     subroutine model_likelihood(param_vector, n, ML)
          implicit none
          double precision, dimension(:), intent(in):: param_vector
-         integer, intent(in) :: n
-         double precision , intent(out):: ML
+         integer, intent(in):: n
+         double precision, intent(out):: ML
     end subroutine model_likelihood
     end interface! 
-    !optionally  give a second function with same shape as model_likelihood , 
-      ! for writing to file;
-    procedure(model_likelihood), optional :: model_likelihood_write_in
+    !optionally  give a second function with same shape as model_likelihood, 
+      ! for writing to file; 
+    procedure(model_likelihood), optional:: model_likelihood_write_in
     ! Going forwards this pointer is the alternateive likelihood function for writing to file
-    procedure(model_likelihood), pointer :: model_likelihood_write
+    procedure(model_likelihood), pointer:: model_likelihood_write
       
 
       ! Declare some arrays
@@ -179,8 +182,10 @@ contains
 
       ! Argument processing  !!!!!!!!!!!!!!!
 
-      if (.not. present(restart)) then 
+      if (.not. present(restart_in)) then 
         restart = .false.
+      else
+        restart = restart_in
       endif
 
       if (.not. present(nchains)) then
@@ -194,14 +199,14 @@ contains
          ! if second function given use it for writing to file
          model_likelihood_write => model_likelihood_write_in
       else
-         ! default , if no argument given: use same function for calculation and printing
+         ! default, if no argument given: use same function for calculation and printing
          model_likelihood_write => model_likelihood
       end if
 
     ! TODO check the function(s) take npars arguments !
 
 
-    ! Allocate arrays - the ones in commom between parallel chains
+    ! Allocate arrays-the ones in commom between parallel chains
 
 
     ! This adaptive MCMC is "parallelized" to do N chains at the same time, but they
@@ -209,45 +214,49 @@ contains
     ! trivial.  It exists mainly as template for samplers with more crossover and more complex
     ! structure in this loop.
     !$OMP parallel do
-    do i = 1, nchains !TODO where the user can input this
+    do i = 1, nchains  ! TODO where the user can input this
         ! saves best loglikelihood and associated parameters to MCOUT(i)
-        call run_mcmc(model_likelihood, PI, MCO, MCOUT, model_likelihood_write, restart)
+        call run_mcmc(model_likelihood, PI, MCO, MCOUT, model_likelihood_write, restart, i)
     end do
     !$OMP end parallel do
 
     !! compare chains
 
-    !! Write files , write to output struct
+    !! Write files, write to output struct
 
-  end subroutine MHMCMC
+  end subroutine run_parallel_mcmc
 
   ! Main function for a single adaptive MCMC simulation
   ! Global settings of the sampler taken from MCO 
-  subroutine run_mcmc(model_likelihood, PI, MCO, MCOUT, model_likelihood_write_in, restart)
+  subroutine run_mcmc(model_likelihood, PI, MCO, MCOUT, model_likelihood_write_in, restart_in, chainid)
     use math_functions, only: log_par2nor, log_nor2par, par2nor, nor2par
-    use samplers_shared, only : init_pars_random_pregen, bounds_check, is_infinity, metropolis_choice
+    use samplers_shared, only : init_pars_random, bounds_check, is_infinity, metropolis_choice
     use cardamom_io, only: write_parameters, write_variances, write_covariance_matrix &
-                          ,write_covariance_info, restart_flag, write_mcmc_output
+                          ,write_covariance_info, restart_flag, write_mcmc_output, open_output_files
     use random_uniform, ONLY: UNIF_VECTOR, initialize
     ! declare any local variables
     !! all variables in here are local to the single chain and the duration of its run
           !! input and output structs
     type(PARINFO), intent(in):: PI
-    type(MHMCMCOPT), intent(in):: MCO
+    type(MCMC_OPTIONS), intent(in):: MCO
     type(MCMC_OUTPUT), intent(out):: MCOUT
-    !type(MCMC_OUTPUT), optional, intent(in):: prev_MCOUT !output of previous run, for restart ! read from module data
-    logical, intent(inout), optional :: restart
+    !type(MCMC_OUTPUT), optional, intent(in):: prev_MCOUT  ! output of previous run, for restart  ! read from module data
+    logical, intent(in), optional:: restart_in
+    integer, intent(in), optional :: chainid
+    logical:: restart
 
-    double precision, dimension(PI%n_pars) :: PARS_previous         & ! parameter values for current state
+    type(io_buffer_space) :: io_space ! this chain has its own io buffers
+    character(350) :: parfilename, stepfilename, covfilename, covinfofilename
+    double precision, dimension(PI%n_pars):: PARS_previous         & ! parameter values for current state
                                             ,PARS_proposed          & ! parameter values for current proposal
                                             ,BESTPARS        ! best set of parameters so far
 
     double precision, dimension(PI%n_pars, MCO%n_steps):: PARSALL  ! All accepted normalised parameters since previous step adaption
-    double precision :: loglikelihood_previous, loglikelihood_proposed
+    double precision:: loglikelihood_previous, loglikelihood_proposed
         !! loglikelihood of a set of parameters 
-    double precision :: output_loglikelihood
+    double precision:: output_loglikelihood
         !! loglikelihood according to  alternative loglikelihood calculation for writing to file
-    double precision :: llmax
+    double precision:: llmax
         !! best loglikelihood seen so far
     double precision:: burn_in_period & ! global TODO module data ?! for how many proposals will we adapt the covariance matrix as a minimum
                        , AM_likelihood &
@@ -256,19 +265,19 @@ contains
                        ,Pmax, P0prior, Pprior & ! as below but for priors only
                        ,P0 & ! previously accepted observation based log-likelihood
                        ,P  & ! current observation based log-likelihood
-                       ,opt_scaling & ! = opt_scaling_const / npars
+                       ,opt_scaling & ! = opt_scaling_const/npars
                        ,beta &
                        ,par_minstepsize &
                        , P_target
-    type(UNIF_VECTOR) :: uniform_random_vector
+    type(UNIF_VECTOR):: uniform_random_vector
       !! object holding array of pre-generated random values - (supposedly faster to pregenerate) - local to this 
       !! chain 
     integer:: i
-    integer :: MAXITER, nchains, npars
-    ! counters - local to this chain's run
-    integer :: ITER, ACC, ACC_FIRST, ACCLOC
+    integer:: MAXITER, nchains, npars
+    ! counters-local to this chain's run
+    integer:: ITER, ACC, ACC_FIRST, ACCLOC
     ! acceptance ratios derived from counters  !TODO possibly belong in stats struct
-    double precision :: ACCRATE, ACCRATE_GLOBAL
+    double precision:: ACCRATE, ACCRATE_GLOBAL
 
 
     ! declare interface for the model likelihood function.
@@ -279,35 +288,35 @@ contains
 
     !! Collecting stats for this run, on space of n_pars normalized parameters.
     ! Formerly part of PI struct, but separated as belonging more to internals and output than input
-    !double precision :: Nparvar 
-    !double precision, dimension(PI%n_pars) :: parvar, meanpar
-    !double precision, dimension(PI%N_pars,PI%n_pars) :: convariance
-    type (MCSTATS) :: stats
+    !double precision:: Nparvar 
+    !double precision, dimension(PI%n_pars):: parvar, meanpar
+    !double precision, dimension(PI%N_pars, PI%n_pars):: convariance
+    type (MCSTATS):: stats
 
     interface
     subroutine model_likelihood(param_vector, n, ML)
          implicit none
          double precision, dimension(:), intent(in):: param_vector
-         integer, intent(in) :: n
-         double precision , intent(out):: ML
+         integer, intent(in):: n
+         double precision, intent(out):: ML
     end subroutine model_likelihood
     end interface
 
-      ! optionally give a second function with same shape as model_likelihood , 
-      ! for writing to file;
-    procedure(model_likelihood), optional :: model_likelihood_write_in
+      ! optionally give a second function with same shape as model_likelihood, 
+      ! for writing to file; 
+    procedure(model_likelihood), optional:: model_likelihood_write_in
     ! Going forwards this pointer is the alternateive likelihood function for writing to file
-    procedure(model_likelihood), pointer :: model_likelihood_write
+    procedure(model_likelihood), pointer:: model_likelihood_write
 
 
-    logical :: accept
+    logical:: accept
 
 
       if (present(model_likelihood_write_in)) then
          ! if second function given use it for writing to file
          model_likelihood_write => model_likelihood_write_in
       else
-         ! default , if no argument given: use same function for calculation and printing
+         ! default, if no argument given: use same function for calculation and printing
          model_likelihood_write => model_likelihood
       end if
 
@@ -319,6 +328,18 @@ contains
     stats%use_multivariate = MCO%use_multivariate
     beta = MCO%beta
     par_minstepsize = MCO%par_minstepsize
+
+    ! process file names 
+    parfilename = MCO%parfilename
+    stepfilename = MCO%stepfilename
+    covfilename = MCO%covfilename
+    covinfofilename = MCO%covinfofilename
+    if (MCO%n_chains>1 .and. present(chainid) ) then
+      write (parfilename, '(a,i3)') MCO%parfilename, chainid
+      write (stepfilename, '(a,i3)') MCO%stepfilename, chainid
+      write (covfilename, '(a,i3)') MCO%covfilename, chainid
+      write (covinfofilename, '(a,i3)') MCO%covinfofilename, chainid
+    endif
 
 
     !! Calculate derived  settings of the run... 
@@ -332,9 +353,11 @@ contains
     ! NOTE 2: 2.381204**2 = 5.670132
     opt_scaling = MCO%opt_scaling_const/dble(PI%n_pars)
   
-      if (.not. present(restart)) then 
-        restart = .false.
-      endif
+    if (.not. present(restart_in)) then 
+      restart = .false.
+    else
+      restart = restart_in
+    endif
 
     if (restart) then
         ! read current state, statistics, history, etc from prev_MC_OUT
@@ -350,24 +373,26 @@ contains
     ACCRATE = 0d0
     ACCRATE_GLOBAL = 0d0
 
-    ! Initialize pregenerated random numbers, if using - local to this chain
+    ! Initialize pregenerated random numbers, if using-local to this chain
     call uniform_random_vector%initialize() 
     
     !TODO opt scaling scalin by n
 
     !!! prepare file writing
-    !call prepare_file()
-    ! add something here to delete previous files if wanted later
-    if (.not. MCO%APPEND  .and. MCO%n_WRITE > 0) then
-        write(*,*) "Oooops have requested that existing files be deleted but & 
-        & not implemented yet."
-    end if
+    ! allocate buffers (different one for each chain)
+    call initialize_buffers(io_space)
+    ! TODO potential restart handling !  outside 
+    !call check_for_existing_output_files(npars, nOUT, nWRITE, sub_fraction &
+    !, parname, stepname, covname, covinfoname)
+    !TODO open separate output file for each chain !
+    call open_output_files(MCO%parfilename, MCO%stepfilename, MCO%covfilename, MCO%covinfofilename)
+
 
 
     !!!! init params
-    ! TODO if not restart / not flag to keep all
+    ! TODO if not restart/not flag to keep all
     if (.not. restart) then
-    call init_pars_random_pregen(PI, PARS_previous, PI%fix_pars, uniform_random_vector)
+    call init_pars_random(PI, PARS_previous, PI%fix_pars, uniform_random_vector)
     endif 
     ! Inform the user
     write(*,*) "Have loaded/randomly assigned PI%parini-now begin the AP-MCMC"
@@ -382,7 +407,7 @@ contains
     
 
 
-    if (is_infinity(loglikelihood_previous)) then  ! TODO is this log evaluating? TODO better check for hard reject ll=inifinity P=0
+    if (is_infinity(loglikelihood_previous)) then  ! TODO is this log evaluating? TODO better check for hard reject ll = inifinity P = 0
         write(*,*) "WARNING  ! loglikelihood = ",loglikelihood_previous, " - &
         & AP-MCMC will get stuck, if so please check initial conditions"
         stop
@@ -400,7 +425,7 @@ contains
 
        ! take a step in parameter space: generate proposed 
        ! new parameters PARS 
-       ! should include reflectivenedd / redrawing 
+       ! should include reflectivenedd/redrawing 
        call step_pars_real(PARS_previous, PARS_proposed, PI, stats, beta, opt_scaling, par_minstepsize, &
           MCO%N_before_mv_target, uniform_random_vector) 
 
@@ -422,7 +447,7 @@ contains
            ! Store accepted parameter proposals (unnormalized values)
            ! keep record of all parameters accepted since step adaption
            ! (this chain)
-           ! Because this history matrix is used for (normalized) statistics for adaptiveness,
+           ! Because this history matrix is used for (normalized) statistics for adaptiveness, 
            ! store normalized version of pars
             PARSALL(1:npars, ACCLOC+1) = log_par2nor(npars, PARS_proposed, PI%parmin, PI%parmax, PI%paradj)  ! add row in history matrix
            ! store the best parameter set
@@ -438,7 +463,7 @@ contains
            PARS_previous(1:npars) = PARS_proposed(1:npars)          ! save as previous pars
            !norPARS0(1:PI%npars) = norPARS(1:PI%npars)                    ! normalize
            loglikelihood_previous = loglikelihood_proposed;               ! save as previous loglikelihood
-        else !TODO
+        else  ! TODO
             ! write to history
        endif  ! accept or reject proposed pars
 
@@ -459,7 +484,7 @@ contains
                call write_mcmc_output(stats%parvar, ACCRATE, &
                                       stats%covariance, &
                                       stats%meanpar, stats%Nparvar, &
-                                      PARS_previous, output_loglikelihood, npars, ITER == MCO%nOUT)
+                                      PARS_previous, output_loglikelihood, npars, ITER == MCO%nOUTi, io_space)
            end if 
        end if  ! write or not to write
 
@@ -486,7 +511,7 @@ contains
                ! single parameter set from each period.
             ! TODO ??
                if (stats%cov) then
-                   ACCLOC=1
+                   ACCLOC = 1
                    PARSALL(1:npars, ACCLOC) = log_par2nor(npars, PARS_previous, PI%parmin, PI%parmax, PI%paradj)
                    ! leads to call to increment_covariance_matrix with the one new row
                else if (ACCLOC > 3) then
@@ -514,7 +539,7 @@ contains
                write(*,*)"Using multivariate sampling = ",MCO%use_multivariate
                write(*,*)"Total proposal = ",ITER, " out of ",MCO%nOUT
                write(*,*)"Total accepted = ",ACC
-               write(*,*)"Overall acceptance rate    = ",ACC/ITER
+               write(*,*)"Overall acceptance rate    = ",dble(ACC)/dble(ITER)
                write(*,*)"Local   acceptance rate    = ",ACCRATE
                write(*,*)"Current obs   = ",P0, "proposed = ",P, " log-likelihood"
                write(*,*)"Current prior = ",P0prior, "proposed = ",Pprior, " log-likelihood"
@@ -533,9 +558,11 @@ contains
     if (MCO%n_WRITE > 0) call write_covariance_matrix(stats%covariance, npars, .false.)
 
     ! record the best single set of parameters
-    MCOUT%bestpars(1:PI%n_pars) = BESTPARS(1:PI%n_pars)
+    MCOUT%bestpars = BESTPARS
+    MCOUT%bestll = llmax
     ! Output the current state, so that next simulations can potentially resume here
-    MCOUT%pars_final(1:PI%n_pars) = PARS_previous(1:PI%n_pars)  !! (!) TODO should be done outside 
+    MCOUT%pars = PARS_previous  !! (!) TODO should be done outside 
+    MCOUT%ll = loglikelihood_previous
     ! record how many iterations were taken to complete
     MCOUT%nos_iterations = MCOUT%nos_iterations+ITER
     ! set flag MCMC completed
@@ -546,7 +573,7 @@ contains
 
     ! completed AP-MCMC loop
     write(*,*)"AP-MCMC loop completed"
-    write(*,*)"Overall acceptance rate     = ", ACC/ITER
+    write(*,*)"Overall acceptance rate     = ", dble(ACC)/dble(ITER)
     write(*,*)"Final local acceptance rate = ",ACCRATE
     ! TODO function to output these two 
     write(*,*)"Best log-likelihood = ",Pmax
@@ -570,11 +597,11 @@ end subroutine
     implicit none
 
     ! declare input types
-    type(MCSTATS) , intent(inout) :: stats ! statistics collection
-    logical, intent (inout) :: use_multivariate
+    type(MCSTATS), intent(inout):: stats  ! statistics collection
+    logical, intent (inout):: use_multivariate
     ! declare inputs variables
-    integer, intent(in) :: npars
-    integer, intent(in) :: ACCLOC
+    integer, intent(in):: npars
+    integer, intent(in):: ACCLOC
     double precision, intent(in):: PARSALL(npars, ACCLOC)  ! collection of recently accepted normalised parameter combinations
     !! two CARDAMOM quirks here :  1) only accepted steps were recorded, not repeat entries for non-accepted steps
     !!                             2) update_statistics is passed only first or first, middle, and last rows instead of whole history, extremely limnited covariance estimate
@@ -584,7 +611,7 @@ end subroutine
     double precision, dimension(npars, npars):: cov_backup
     double precision, dimension(npars):: mean_par_backup
     double precision:: Nparvar_backup, Nparvar_local
-    double precision :: N_before_mv_target
+    double precision:: N_before_mv_target
 
     ! if we have a covariance matrix then we want to update it, if not then we need to create one
     if (stats%cov) then
@@ -592,7 +619,7 @@ end subroutine
         ! Increment the variance-covariance matrix with new accepted parameter sets
         ! NOTE: that this also increments the total accepted counter (PI%Nparvar)
 
-        cov_backup = stats%covariance; mean_par_backup = stats%meanpar; Nparvar_backup =stats%Nparvar
+        cov_backup = stats%covariance; mean_par_backup = stats%meanpar; Nparvar_backup = stats%Nparvar
 
 !        call increment_covariance_matrix(PARSALL(1:PI%npars, 1:nint(N%ACCLOC)), PI%mean_par, PI%npars &
 !                                        ,PI%Nparvar, nint(N%ACCLOC), PI%covariance)
@@ -602,7 +629,7 @@ end subroutine
         !! TODO discuss 
         Nparvar_local = min(N_before_mv_target, Nparvar_backup)
         call increment_covariance_matrix(PARSALL(1:npars, 1:ACCLOC), stats%meanpar, npars &
-                                        ,Nparvar_local,ACCLOC, stats%covariance)
+                                        ,Nparvar_local, ACCLOC, stats%covariance)
         ! Calculate the cholesky factor as this includes a determination of
         ! whether the covariance matrix is positive definite.
         call cholesky_factor( npars, stats%covariance, info )
@@ -678,12 +705,12 @@ end subroutine
     implicit none
     double precision, dimension(:), intent(in   ):: pars0    ! current parameters
     double precision, dimension(:), intent(out  ):: pars       ! proposal
-    type(UNIF_VECTOR), intent(inout) :: random_uniform_vector
-    type(PARINFO) :: PI
-    type(MCSTATS), intent(inout) :: stats
+    type(UNIF_VECTOR), intent(inout):: random_uniform_vector
+    type(PARINFO):: PI
+    type(MCSTATS), intent(inout):: stats
     double precision, dimension(PI%n_pars)             :: pars0_norm, pars_norm
-    double precision, intent(in) :: beta, opt_scaling, par_minstepsize
-    double precision, intent(in) :: N_before_mv_target
+    double precision, intent(in):: beta, opt_scaling, par_minstepsize
+    double precision, intent(in):: N_before_mv_target
     pars0_norm = log_par2nor(PI%n_pars, pars0, PI%parmin, PI%parmax, PI%paradj)
     call step_pars(pars0_norm, pars_norm, PI%n_pars, stats, beta, opt_scaling, par_minstepsize, &
         N_before_mv_target, random_uniform_vector )
@@ -693,14 +720,14 @@ end subroutine
   !
   !------------------------------------------------------------------
   !
-  ! Applies Roberts and Rosenthal 2009 - Eq 3 to generate new proposed state in (normalized)
+  ! Applies Roberts and Rosenthal 2009-Eq 3 to generate new proposed state in (normalized)
   ! parameter space
   ! IN : Pars0 current state (normalized)
   ! IN : Stats MCOSTATS object holding info like covariance matrix of the run so far (calculated on 
   ! normalized space )
   ! OUT: PARS new proposed state (normalized)
   ! plus take beta from module data
-  subroutine step_pars(PARS0, PARS, npars, stats, beta, opt_scaling, par_minstepsize, N_before_mv_target, random_uniform_vector) !TODO check against original !! 
+  subroutine step_pars(PARS0, PARS, npars, stats, beta, opt_scaling, par_minstepsize, N_before_mv_target, random_uniform_vector)  ! TODO check against original !! 
     use math_functions, only:  random_normal, random_multivariate
     use random_uniform, only : UNIF_VECTOR
 
@@ -713,12 +740,12 @@ end subroutine
                                                            !,norpars  & ! normalised proposal
     double precision, dimension(:), intent(in   ):: pars0    ! current parameters
     double precision, dimension(:), intent(out  ):: pars       ! proposal
-    integer, intent(in) :: npars
-    type(UNIF_VECTOR), intent(inout) :: random_uniform_vector
-    !type(MHMCMCOPT) , intent(in) :: MCO
-    type(MCSTATS), intent(inout) :: stats
-    double precision, intent(in) :: beta, opt_scaling, par_minstepsize
-    double precision, intent(in) :: N_before_mv_target
+    integer, intent(in):: npars
+    type(UNIF_VECTOR), intent(inout):: random_uniform_vector
+    !type(MHMCMCOPT), intent(in):: MCO
+    type(MCSTATS), intent(inout):: stats
+    double precision, intent(in):: beta, opt_scaling, par_minstepsize
+    double precision, intent(in):: N_before_mv_target
     
     ! declare local variables
     integer:: p
@@ -734,14 +761,14 @@ end subroutine
     
     ! Sample random normal distribution (mean = 0, sd = 1)
     ! TODO vectorize
-    do p=1, npars
+    do p = 1, npars
         call random_normal(random_uniform_vector, rn2(p))
     end do
 
     if ((stats%use_multivariate .and. stats%Nparvar > N_before_mv_target)) then
 
         ! Is this step a multivariate proposal or not
-        stats%multivariate_proposal = .true. ! this only affects ACC_first counter !TODO
+        stats%multivariate_proposal = .true. ! this only affects ACC_first counter  ! TODO
 
         ! Draw from multivariate random distribution
         ! NOTE: if covariance matrix provided is not positive definite
@@ -767,4 +794,4 @@ end subroutine
   !
   !------------------------------------------------------------------
   !
-end module MHMCMC_module
+end module MHMCMC

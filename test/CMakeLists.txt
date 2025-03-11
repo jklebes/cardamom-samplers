@@ -8,12 +8,15 @@ endif()
 # Unit testing
 set(
   tests
+  "random"
+  "math"
   "common"
-  #"MCMC"
+  "MCMC"
   "DEMCz"
 )
 set(
   test-srcs
+  "test_functions.f90"
   "main.f90"
 )
 foreach(t IN LISTS tests)

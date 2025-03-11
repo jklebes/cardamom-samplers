@@ -1,6 +1,7 @@
 module test_DEMCz
   use testdrive, only : new_unittest, unittest_type, error_type, check
   use DEMCz_module
+  use test_functions
   implicit none
   private
 
@@ -10,23 +11,7 @@ module test_DEMCz
 
 contains
 
-! A test function E = A*(x-x_0)^2 + B*(y-y_0)^2 
-subroutine ll_normal(pars, npars, res)
-  integer, intent(in) :: npars 
-double precision, dimension(:), intent(in):: pars
-double precision, intent(out) :: res
-double precision :: x, y ! the pars to fit
-double precision :: x_0, y_0 ! The correct, energy/loglikelihood-minimizing answer will be x=x0, y=y0
-double precision :: A, B 
-x = pars(1)
-y = pars(2)
-x_0 = 5.1
-y_0 = 5.0
-A = 1.0
-B = 1.6 ! covariance matrix expected to have inversely proportional entries on diagonal
-! and zeros on off-diagonal for x-y correlation 
-res = A*(x-x_0)**2 + B*(y-y_0)**2
-end subroutine
+
 
 !> Collect all exported unit tests
 subroutine collect_DEMCztests(testsuite)
@@ -126,12 +111,7 @@ subroutine test_metropolis_stochastic(error)
     type(DEMCzOPT) :: options
     type(MCMC_OUTPUT) :: DEMCzOUT 
 
-    ! A struct with parameter limits
-    PI%n_pars = 2
-    PI%parmin(1) = -3.0
-    PI%parmax(1) = 110
-    PI%parmin(2) = 2.5
-    PI%parmin(2) = 7.5
+
    
     ! single chain
     options%n_steps = 100

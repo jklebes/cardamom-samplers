@@ -11,25 +11,31 @@ module random_uniform
 
   public UNIF_VECTOR, get_random_uniform, next_random_uniform
     type UNIF_VECTOR
-        integer:: length
-        double precision, dimension(:), allocatable:: u
+        integer :: length = 1000 !TODO get default from orig cardamom
+        double precision, dimension(:), allocatable :: u
         integer:: index
         contains 
-        procedure:: initialize => initialize
-        procedure:: get_random_uniform  => get_random_uniform
-        procedure:: next_random_uniform => next_random_uniform
+        procedure:: initialize
+        procedure:: get_random_uniform
+        procedure:: next_random_uniform
     end type
 
     contains
 
   subroutine initialize(this)
     class(UNIF_VECTOR):: this
+    integer :: seed = 100
+    call rnstrt(seed) ! TODO no longer necessary to do from outside take out of main
+    ! TODO pass seed down
+    if (.not.allocated(this%u)) then
+      allocate(this%u(this%length))
+    end if
     call fill_random_uniform(this%u, this%length)
     this%index = 1
   end subroutine
 
 
-  function get_random_uniform(this, n, x)
+  function get_random_uniform(this, n) result(x)
     !! getter from array of pre-generated random values, 
     !! handling re-filling of the array when needed
     class(UNIF_VECTOR):: this
@@ -40,10 +46,11 @@ module random_uniform
 
     if (this%index+n  > this%length) then  ! refill if running out of random values
         call fill_random_uniform(this%u, this%length)
+        this%index = 1
     endif
     ! TODO not handled, will get stuck in infinite loop:  n > this%length   
 
-    x(1:n) = this%u(this%index : this%index+n)
+    x  = this%u(this%index : this%index+n)
 
     ! update the index pointer
     this%index = this%index+n
@@ -58,8 +65,9 @@ module random_uniform
 
     if (this%index+1  > this%length) then  ! refill if running out of random values
         call fill_random_uniform(this%u, this%length)
+        this%index = 1
     endif
-
+    write(*,*) this%index
     x = this%u(this%index)
 
     ! update the index pointer

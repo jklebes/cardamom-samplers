@@ -1,8 +1,10 @@
 program tester
   use, intrinsic:: iso_fortran_env, only : error_unit
   use testdrive, only : run_testsuite, new_testsuite, testsuite_type
+  use test_random, only : collect_randomtests
+  !use test_math, only : collect_mathtests
   use test_common, only : collect_commontests
-  !use test_MCMC, only : collect_MCMCtests
+  use test_MCMC, only : collect_MCMCtests
   use test_DEMCz, only : collect_DEMCztests
   implicit none
   integer:: stat, is
@@ -12,8 +14,10 @@ program tester
   stat = 0
 
   testsuites = [ &
+    new_testsuite("randomtests", collect_randomtests), &
+    !new_testsuite("mathtests", collect_mathtests), &
     new_testsuite("commontests", collect_commontests), &
-    !new_testsuite("MCMCtests", collect_MCMCtests), &
+    new_testsuite("MCMCtests", collect_MCMCtests), &
     new_testsuite("DEMCztests", collect_DEMCztests) &
      ]
 

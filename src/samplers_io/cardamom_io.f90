@@ -45,7 +45,6 @@ module cardamom_io
   ! parameters
   integer, parameter:: real_bytes = 8  ! number of bytes in real variable, 8 bytes is to make double precision
 
-  ! TODO taken from cardamom_structures.f90, where to park this in the future?
   type io_buffer_space
     integer:: io_buffer, io_buffer_count
     double precision, allocatable, dimension(:,:) :: &
@@ -58,7 +57,6 @@ module cardamom_io
                                accept_rate_buffer, &
                                       prob_buffer
   end type
-  type(io_buffer_space):: io_space
 
   save
 
@@ -183,9 +181,32 @@ module cardamom_io
     open(cfile_unit, file = trim(covname), form="UNFORMATTED",access="direct",recl = reclen, iostat = ios)
     if (ios /= 0) print*,"error ",ios, " opening file",trim(covname)
 
-    return
 
   end subroutine open_output_files
+
+  subroutine initialize_buffers(npars, n_write_events, io_space)
+    integer, intent(in) :: npars, n_write_events
+    type(io_buffer_space), intent(inout) :: io_space
+    ! TODO oops each chain needs its own buffer obeject and file streams
+    ! also initialize buffers
+    ! TODO move because not fitting function name
+   ! Initialise counters used to track the output of parameter sets
+    io_space%io_buffer_count = 0 
+    io_space%io_buffer = min(1000, max(10, n_write_events / 10))
+   
+    ! Allocate variables used in io buffering, 
+    ! these could probably be moved to a more sensible place within cardamom_io.f90
+    allocate(io_space%variance_buffer(npars, io_space%io_buffer), &
+             io_space%mean_pars_buffer(npars, io_space%io_buffer), &
+             io_space%pars_buffer(npars, io_space%io_buffer), &
+             io_space%prob_buffer(io_space%io_buffer), &
+             io_space%nsample_buffer(io_space%io_buffer), &
+             io_space%accept_rate_buffer(io_space%io_buffer))
+ 
+
+    return
+
+  end subroutine 
 
  
   !
@@ -324,7 +345,7 @@ module cardamom_io
   !
   subroutine write_mcmc_output(variance, accept_rate, &
                                covariance, mean_pars, nsample, &
-                               pars, prob, npars, dump_now)
+                               pars, prob, npars, dump_now, io_space)
 
     ! Arguments
     integer, intent(in):: npars
@@ -334,6 +355,7 @@ module cardamom_io
                                                            pars
     double precision, intent(in):: nsample, accept_rate, prob
     logical, intent(in):: dump_now
+    type(io_buffer_space), intent(inout) :: io_space
 
     ! Local variables
     integer:: i
