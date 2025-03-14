@@ -1,6 +1,7 @@
 module test_MCMC
   use testdrive, only : new_unittest, unittest_type, error_type, check
   use test_functions
+  use random_uniform
   use MHMCMC
   implicit none
   private
@@ -16,25 +17,62 @@ subroutine collect_MCMCtests(testsuite)
   type(unittest_type), allocatable, intent(out):: testsuite(:)
 
   testsuite = [ &
-    new_unittest("valid", test_valid), &
-    new_unittest("mcmc_output_type", test_mcmc_output_type), &
-    new_unittest("mcmc_len0", test_run_mcmc_len0) &
+    new_unittest("step_pars", test_step_pars), &
+    !new_unittest("step_pars_real", test_step_pars_real), &
+    new_unittest("mcmc_output_type", test_mcmc_output_type) &
+    !new_unittest("mcmc_len0", test_run_mcmc_len0) &
     ]
 
 end subroutine collect_MCMCtests
 
-subroutine test_valid(error)
+
+subroutine test_step_pars(error)
   implicit none
   type(error_type), allocatable, intent(out):: error
-  ! ...
-end subroutine test_valid
+  ! generate new proposal PARS given current point PARS0 and other specs
+  ! example point x,y=0,0 with independent variances
+  integer, parameter :: npars= 2
+  double precision, dimension(npars) :: pars0, pars
+  logical :: multivariate = .true.
+  double precision, dimension(npars, npars) :: covariance
+  double precision :: beta = 0.05d0 ! recommended constant, only relevant in multivariate phase
+  double precision :: opt_scaling = 5.67/dble(npars) ! recommended constant 
+  double precision :: par_minstepsize = 0.001d0 ! ?? what does this do ?
+  type(UNIF_VECTOR) :: random_uniform
+  call random_uniform%initialize()
+  pars0 = (/0d0, 0d0/)
+  covariance = reshape(source = [1d0, 0d0, 1d0, 0d0], shape = [2,2]) ! uncorellated with large variance
+  call step_pars(pars0, pars, npars, multivariate, covariance, beta, opt_scaling, par_minstepsize, random_uniform)
+  ! expect pars is close to , but not equal pars0
+  call check(error, (pars(1)/=0d0) .and. (pars(2)/=0d0))
+  ! in bounds
+  call check(error, (pars(1)>=0d0) .and. (pars(1)<=1d0))
+  call check(error, (pars(2)>=0d0) .and. (pars(2)<=1d0))
+end subroutine test_step_pars
 
-subroutine test_step(error)
+subroutine test_step_pars_real(error)
   implicit none
   type(error_type), allocatable, intent(out):: error
-  ! step() takes vector of pars, modifies it
-
-end subroutine test_step
+  ! generate new proposal PARS given current point PARS0 and other specs
+  ! example point x,y=0,0 with independent variances
+  double precision, dimension(PI_xy%n_pars) :: pars0, pars
+  logical :: multivariate = .true.
+  double precision, dimension(PI_xy%n_pars, PI_xy%n_pars) :: covariance
+  double precision :: beta = 0.05d0 ! recommended constant, only relevant in multivariate phase
+  double precision :: opt_scaling  ! recommended constant 
+  double precision :: par_minstepsize = 0.001d0 ! ?? what does this do ?
+  type(UNIF_VECTOR) :: random_uniform
+  opt_scaling = 5.67/dble(PI_xy%n_pars)
+  call random_uniform%initialize()
+  pars0 = (/0d0, 0d0/) ! within bounds of PI_xy
+  covariance = reshape(source = [1d0, 0d0, 1d0, 0d0], shape = [2,2]) ! uncorellated with large variance
+  call step_pars_real(pars0, pars, PI_xy, multivariate, covariance, beta, opt_scaling, par_minstepsize, random_uniform)
+  ! expect pars is close to , but not equal pars0
+  call check(error, (pars(1)/=0d0) .and. (pars(2)/=0d0))
+  ! in bounds
+  call check(error, (pars(1)>=PI_xy%parmin(1)) .and. (pars(1)<=PI_xy%parmax(1)))
+  call check(error, (pars(2)>=PI_xy%parmin(2)) .and. (pars(2)<=PI_xy%parmax(2)))
+end subroutine test_step_pars_real
 
 subroutine test_adapt_step_size(error)
   implicit none
@@ -78,24 +116,24 @@ end subroutine
 subroutine test_run_mcmc_len0(error)
   implicit none
   type(error_type), allocatable, intent(out):: error
-  type(MCMC_OUTPUT) :: MCOUT
-  type(MCMC_OPTIONS) :: MCOPT ! filled with defaults only
+  type(mcmc_output) :: mcout
+  type(mcmc_options) :: mcopt ! filled with defaults only
   ! zero length run : takes expected input arguments, setup works, 
   ! outputs/writes unchanged state
   ! all on defaults, without optional arguments
-  call init_PI()
-  MCOPT%MAXITER = 0
-  call run_mcmc(ll_normal, PI_xy, MCOPT, MCOUT)
-  ! expect values in MCOUT : a random initial state (within given parameter bounds) 
+  call init_pi()
+  mcopt%maxiter = 0
+  call run_mcmc(ll_normal, pi_xy, mcopt, mcout)
+  ! expect values in mcout : a random initial state (within given parameter bounds) 
   ! and its loglikelihood
-  call check(error, MCOUT%ll > 0 )
-  call check(error, MCOUT%pars(1) >= PI_xy%parmin(1) .and. MCOUT%pars(1) <= PI_xy%parmax(1))
-  call check(error, MCOUT%pars(2) >= PI_xy%parmin(2) .and. MCOUT%pars(2) <= PI_xy%parmax(2) )
-  ! Given starting values which happen to be the correct (min loglik) solution, 
-  ! Expect after zero run steps MCOUT has these initial values and 
+  call check(error, mcout%ll > 0 )
+  call check(error, mcout%pars(1) >= pi_xy%parmin(1) .and. mcout%pars(1) <= pi_xy%parmax(1))
+  call check(error, mcout%pars(2) >= pi_xy%parmin(2) .and. mcout%pars(2) <= pi_xy%parmax(2) )
+  ! given starting values which happen to be the correct (min loglik) solution, 
+  ! expect after zero run steps mcout has these initial values and 
   ! lolglik is low.
-  call check(error, MCOUT%pars(1), x_ideal )
-  call check(error, MCOUT%pars(2), y_ideal)
+  call check(error, mcout%pars(1), x_ideal )
+  call check(error, mcout%pars(2), y_ideal)
   call check(error, MCOUT% ll, 0.0 )
 end subroutine 
 

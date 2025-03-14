@@ -31,11 +31,10 @@ module cardamom_io
            ,write_covariance_matrix         &
            ,write_covariance_info           &
            ,check_for_existing_output_files &
+           ,initialize_buffers              &
            ,open_output_files               &
            ,close_output_files              
 
-  ! allow access to needed variable
-  public:: restart_flag
 
   ! declare module level variables
   integer:: pfile_unit = 10, sfile_unit = 11, cfile_unit = 12, cifile_unit = 13, ifile_unit = 14
@@ -57,6 +56,8 @@ module cardamom_io
                                accept_rate_buffer, &
                                       prob_buffer
   end type
+  ! allow access to needed variable
+  public:: restart_flag, io_buffer_space
 
   save
 
@@ -185,14 +186,14 @@ module cardamom_io
   end subroutine open_output_files
 
   subroutine initialize_buffers(npars, n_write_events, io_space)
-    integer, intent(in) :: npars, n_write_events
-    type(io_buffer_space), intent(inout) :: io_space
+    integer, intent(in):: npars, n_write_events
+    type(io_buffer_space), intent(inout):: io_space
     ! TODO oops each chain needs its own buffer obeject and file streams
     ! also initialize buffers
     ! TODO move because not fitting function name
    ! Initialise counters used to track the output of parameter sets
     io_space%io_buffer_count = 0 
-    io_space%io_buffer = min(1000, max(10, n_write_events / 10))
+    io_space%io_buffer = min(1000, max(10, n_write_events/10))
    
     ! Allocate variables used in io buffering, 
     ! these could probably be moved to a more sensible place within cardamom_io.f90
@@ -355,7 +356,7 @@ module cardamom_io
                                                            pars
     double precision, intent(in):: nsample, accept_rate, prob
     logical, intent(in):: dump_now
-    type(io_buffer_space), intent(inout) :: io_space
+    type(io_buffer_space), intent(inout):: io_space
 
     ! Local variables
     integer:: i

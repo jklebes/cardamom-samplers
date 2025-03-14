@@ -40,7 +40,7 @@ module MHMCMC
    !  Call subroutine DEMCz(fct, parinfo, mcopt, mcmcout) 
 
 use samplers_shared, only: PARINFO
-use cardamom_io
+use cardamom_io, only: io_buffer_space, initialize_buffers, open_output_files
 
 implicit none
 
@@ -49,17 +49,17 @@ public
 !> A collection of input options to the DEMCz sampler run
 !> contains default values 
 type MCMC_OPTIONS
-integer:: MAXITER =10000 ! overall steps, if convergence not reached
-integer:: n_steps  =1000 ! steps per "local" sampling period, between adaptation steps
-integer:: N_chains =1 ! consider setting OMP env to something compatible
-integer:: n_write =1000
+integer:: MAXITER = 10000  ! overall steps, if convergence not reached
+integer:: n_steps  =1000  ! steps per "local" sampling period, between adaptation steps
+integer:: N_chains = 1  ! consider setting OMP env to something compatible
+integer:: n_write = 1000
 integer:: nprint = 1000
 real:: P_target  ! termination criteria 
 ! file names
-character(350) :: parfilename = "parout.txt"
-character(350) :: stepfilename = "stepout.txt"
+character(350):: parfilename = "parout.txt"
+character(350):: stepfilename = "stepout.txt"
 character(350) ::  covfilename = "covout.txt"
-character(350) :: covinfofilename = "covinfoout.txt"
+character(350):: covinfofilename = "covinfoout.txt"
 ! Adaptive !!
 ! setting for adaptive AP-MCMC step size
 double precision:: par_minstepsize = 0.001d0 & ! 0.0005 -> 0.001 -> 0.01 -> 0.1 -> 0.005
@@ -242,11 +242,11 @@ contains
     type(MCMC_OUTPUT), intent(out):: MCOUT
     !type(MCMC_OUTPUT), optional, intent(in):: prev_MCOUT  ! output of previous run, for restart  ! read from module data
     logical, intent(in), optional:: restart_in
-    integer, intent(in), optional :: chainid
+    integer, intent(in), optional:: chainid
     logical:: restart
 
-    type(io_buffer_space) :: io_space ! this chain has its own io buffers
-    character(350) :: parfilename, stepfilename, covfilename, covinfofilename
+    type(io_buffer_space):: io_space  ! this chain has its own io buffers
+    character(350):: parfilename, stepfilename, covfilename, covinfofilename
     double precision, dimension(PI%n_pars):: PARS_previous         & ! parameter values for current state
                                             ,PARS_proposed          & ! parameter values for current proposal
                                             ,BESTPARS        ! best set of parameters so far
@@ -270,6 +270,7 @@ contains
                        ,par_minstepsize &
                        , P_target
     type(UNIF_VECTOR):: uniform_random_vector
+    logical :: multivariate
       !! object holding array of pre-generated random values - (supposedly faster to pregenerate) - local to this 
       !! chain 
     integer:: i
@@ -334,11 +335,11 @@ contains
     stepfilename = MCO%stepfilename
     covfilename = MCO%covfilename
     covinfofilename = MCO%covinfofilename
-    if (MCO%n_chains>1 .and. present(chainid) ) then
-      write (parfilename, '(a,i3)') MCO%parfilename, chainid
-      write (stepfilename, '(a,i3)') MCO%stepfilename, chainid
-      write (covfilename, '(a,i3)') MCO%covfilename, chainid
-      write (covinfofilename, '(a,i3)') MCO%covinfofilename, chainid
+    if (MCO%n_chains > 1 .and. present(chainid) ) then
+      write (parfilename, '(a, i3)') MCO%parfilename, chainid
+      write (stepfilename, '(a, i3)') MCO%stepfilename, chainid
+      write (covfilename, '(a, i3)') MCO%covfilename, chainid
+      write (covinfofilename, '(a, i3)') MCO%covinfofilename, chainid
     endif
 
 
@@ -380,7 +381,7 @@ contains
 
     !!! prepare file writing
     ! allocate buffers (different one for each chain)
-    call initialize_buffers(io_space)
+    call initialize_buffers(npars, MAXITER/MCO%n_write, io_space)
     ! TODO potential restart handling !  outside 
     !call check_for_existing_output_files(npars, nOUT, nWRITE, sub_fraction &
     !, parname, stepname, covname, covinfoname)
@@ -426,8 +427,9 @@ contains
        ! take a step in parameter space: generate proposed 
        ! new parameters PARS 
        ! should include reflectivenedd/redrawing 
-       call step_pars_real(PARS_previous, PARS_proposed, PI, stats, beta, opt_scaling, par_minstepsize, &
-          MCO%N_before_mv_target, uniform_random_vector) 
+       multivariate = stats%use_multivariate .and. (stats%Nparvar > MCO%N_before_mv_target)
+       call step_pars_real(PARS_previous, PARS_proposed, PI, multivariate, stats%covariance, beta, opt_scaling, par_minstepsize, &
+          uniform_random_vector) 
 
        ! if parameter proposal in bounds check the model
        ! TODO LATER if we get a reflective gaussian kernel, no need to check
@@ -484,7 +486,7 @@ contains
                call write_mcmc_output(stats%parvar, ACCRATE, &
                                       stats%covariance, &
                                       stats%meanpar, stats%Nparvar, &
-                                      PARS_previous, output_loglikelihood, npars, ITER == MCO%nOUTi, io_space)
+                                      PARS_previous, output_loglikelihood, npars, ITER == MCO%nOUT, io_space)
            end if 
        end if  ! write or not to write
 
@@ -699,21 +701,24 @@ end subroutine
 
   ! Generates new proposed state from currect state in real parameter space.  
   ! Wraps step_pars
-  subroutine step_pars_real(PARS0, PARS, PI, stats, beta, opt_scaling, par_minstepsize, N_before_mv_target, random_uniform_vector)
+  subroutine step_pars_real(PARS0, PARS, PI, multivariate, covariance, beta, opt_scaling,&
+     par_minstepsize, random_uniform_vector)
     use math_functions, only: log_par2nor, log_nor2par
     use random_uniform, only : UNIF_VECTOR
     implicit none
     double precision, dimension(:), intent(in   ):: pars0    ! current parameters
     double precision, dimension(:), intent(out  ):: pars       ! proposal
     type(UNIF_VECTOR), intent(inout):: random_uniform_vector
+    !integer, intent(in):: npars
     type(PARINFO):: PI
-    type(MCSTATS), intent(inout):: stats
+    !type(MCSTATS), intent(inout):: stats
+    logical, intent(in) :: multivariate
+    double precision, dimension(:,:), intent(in) :: covariance
     double precision, dimension(PI%n_pars)             :: pars0_norm, pars_norm
     double precision, intent(in):: beta, opt_scaling, par_minstepsize
-    double precision, intent(in):: N_before_mv_target
     pars0_norm = log_par2nor(PI%n_pars, pars0, PI%parmin, PI%parmax, PI%paradj)
-    call step_pars(pars0_norm, pars_norm, PI%n_pars, stats, beta, opt_scaling, par_minstepsize, &
-        N_before_mv_target, random_uniform_vector )
+    call step_pars(pars0_norm, pars_norm, PI%n_pars, multivariate, covariance, beta, opt_scaling, par_minstepsize, &
+         random_uniform_vector )
     pars = log_nor2par(PI%n_pars, pars_norm, PI%parmin, PI%parmax, PI%paradj)
   end subroutine 
 
@@ -727,7 +732,8 @@ end subroutine
   ! normalized space )
   ! OUT: PARS new proposed state (normalized)
   ! plus take beta from module data
-  subroutine step_pars(PARS0, PARS, npars, stats, beta, opt_scaling, par_minstepsize, N_before_mv_target, random_uniform_vector)  ! TODO check against original !! 
+  subroutine step_pars(PARS0, PARS, npars, multivariate, covariance, beta, opt_scaling, &
+    par_minstepsize, random_uniform_vector)  ! TODO check against original !! 
     use math_functions, only:  random_normal, random_multivariate
     use random_uniform, only : UNIF_VECTOR
 
@@ -743,9 +749,10 @@ end subroutine
     integer, intent(in):: npars
     type(UNIF_VECTOR), intent(inout):: random_uniform_vector
     !type(MHMCMCOPT), intent(in):: MCO
-    type(MCSTATS), intent(inout):: stats
+    !type(MCSTATS), intent(in):: stats
+    logical, intent(in) :: multivariate
+    double precision, dimension(:,:), intent(in) :: covariance
     double precision, intent(in):: beta, opt_scaling, par_minstepsize
-    double precision, intent(in):: N_before_mv_target
     
     ! declare local variables
     integer:: p
@@ -765,15 +772,15 @@ end subroutine
         call random_normal(random_uniform_vector, rn2(p))
     end do
 
-    if ((stats%use_multivariate .and. stats%Nparvar > N_before_mv_target)) then
+    if (multivariate) then !((stats%use_multivariate .and. stats%Nparvar > N_before_mv_target)) then
 
         ! Is this step a multivariate proposal or not
-        stats%multivariate_proposal = .true. ! this only affects ACC_first counter  ! TODO
+        ! stats%multivariate_proposal = .true. ! this only affects ACC_first counter  ! TODO move to where use_multivariate, Nparvar updates
 
         ! Draw from multivariate random distribution
         ! NOTE: if covariance matrix provided is not positive definite
-        !       a sample form normal distribution is returned
-        call random_multivariate(npars, 1, stats%covariance, mu, rn, random_uniform_vector)
+        !       a sample from normal distribution is returned
+        call random_multivariate(npars, 1, covariance, mu, rn, random_uniform_vector)
 
         ! Estimate the step to be applied to the current parameter vector to
         ! create the new proposal. scd = a scaling parameter linking searching
@@ -785,8 +792,8 @@ end subroutine
 
     else 
 
-       stats%multivariate_proposal = .false.
-       pars = pars0 + (par_minstepsize*rn2)
+      !stats%multivariate_proposal = .false.
+      pars = pars0 + (par_minstepsize*rn2)
 
     end if
 
