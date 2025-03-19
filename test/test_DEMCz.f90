@@ -23,6 +23,7 @@ subroutine collect_DEMCztests(testsuite)
     new_unittest("Options_type", test_MCO), &
     new_unittest("random_int", test_random_int), &
     new_unittest("metropolis_choice", test_metropolis_choice), &
+    new_unittest("metropolis_increase", test_metropolis_increase), &
     new_unittest("metropolis_stochastic", test_metropolis_stochastic) &
     ]
 
@@ -59,18 +60,28 @@ subroutine test_random_int(error)
 end subroutine test_random_int
 
 subroutine test_metropolis_choice(error)
-!> Metropolis chioce function takes two log(!) likelihoods
-!> and returns logical
-!> The first argument is the new/proposed loglikelihood
-  use DEMCz_module, only: metropolis_choice
-  implicit none
-  type(error_type), allocatable, intent(out):: error
-  ! certain acceptance of state with probability 1 vs 0
-  call check(error, metropolis_choice(log(1.0_dp), log(1e-15_dp)),.true. )
-  ! certain rejection of state with probability 0 vs 1
-  call check(error, metropolis_choice(log(1e-15_dp), log(1.0_dp)),.false. )
+  !> Metropolis chioce function takes two log(!) likelihoods
+  !> and returns logical
+  !> The first argument is the new/proposed loglikelihood
+    use DEMCz_module, only: metropolis_choice
+    implicit none
+    type(error_type), allocatable, intent(out):: error
+    ! certain acceptance of state with probability 1 vs 0
+    call check(error, metropolis_choice(log(1.0_dp), log(1e-15_dp)),.true. )
+    ! certain rejection of state with probability 0 vs 1
+    call check(error, metropolis_choice(log(1e-15_dp), log(1.0_dp)),.false. )
+  
+  end subroutine test_metropolis_choice
 
-end subroutine test_metropolis_choice
+  subroutine test_metropolis_increase(error)
+    !> We are maximizing ll
+    !> unconditional acceptance if new ll is bigger
+      use DEMCz_module, only: metropolis_choice
+      implicit none
+      type(error_type), allocatable, intent(out):: error
+      ! certain accept if new(first) ll is bigger
+      call check(error, metropolis_choice(1.1_dp, 1.0_dp), .true. )
+  end subroutine test_metropolis_increase
 
 subroutine test_metropolis_stochastic(error)
   !> Metropolis chioce function takes two log(!) likelihoods

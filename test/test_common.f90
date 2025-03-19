@@ -42,10 +42,10 @@ subroutine test_init_pars_random(error)
   type(UNIF_VECTOR):: random_uniform
   call random_uniform%initialize
 
-  allocate(pars0(PI_xy%n_pars))
+  if (.not. allocated(pars0)) allocate(pars0(PI_xy%n_pars))
   ! with no fix_pars_flag
   call init_pars_random(PI_xy, pars0, uniform_random_vector = random_uniform) 
-  allocate(fix_pars_flag(PI_xy%n_pars))
+  if (.not. allocated(fix_pars_flag) ) allocate(fix_pars_flag(PI_xy%n_pars))
   ! with fix_pars_flag all false
   fix_pars_flag = .false.
   call init_pars_random(PI_xy, pars0, fix_pars_flag, random_uniform) 

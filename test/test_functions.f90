@@ -22,21 +22,24 @@ y_0 = y_ideal
 A = 1.0
 B = 1.6  ! covariance matrix expected to have inversely proportional entries on diagonal
 ! and zeros on off-diagonal for x-y correlation 
-res = A*(x-x_0)**2+B*(y-y_0)**2
+res = -(A*(x-x_0)**2+B*(y-y_0)**2)
 end subroutine
 
 subroutine init_PI()
   PI_xy%n_pars = 2
-  allocate(PI_xy%parmin(PI_xy%n_pars))
-  allocate(PI_xy%parmax(PI_xy%n_pars))
+  if (.not. allocated(PI_xy%parmin)) allocate(PI_xy%parmin(PI_xy%n_pars))
+  if (.not. allocated(PI_xy%parmax)) allocate(PI_xy%parmax(PI_xy%n_pars))
   PI_xy%parmin(1) = -3.0
   PI_xy%parmax(1) = 110
   PI_xy%parmin(2) = 2.5
-  PI_xy%parmin(2) = 7.5
+  PI_xy%parmax(2) = 7.5
 
-  allocate(PI_xy%paradj(PI_xy%n_pars))
-  PI_xy%paradj(1) = 0.0
+  if (.not. allocated(PI_xy%paradj)) allocate(PI_xy%paradj(PI_xy%n_pars))
+  PI_xy%paradj(1) = 4.0
   PI_xy%paradj(2) = 0.0
+
+  if (.not. allocated(PI_xy%fix_pars)) allocate(PI_xy%fix_pars(PI_xy%n_pars))
+  PI_xy%fix_pars = .false.
 end subroutine
 
 end module

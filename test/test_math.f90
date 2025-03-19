@@ -89,7 +89,6 @@ subroutine test_nor2par(error)
   integer :: i
   pars_real = nor2par(npars, pars_norm1, parmin, parmax)
   ! expect values in bounds parmin, parmax
-  write(*,*) pars_real
   call check(error, all(pars_real>=parmin) .and. all(pars_real<=parmax))
 end subroutine 
 
@@ -115,7 +114,6 @@ subroutine test_log_nor2par(error)
   double precision, dimension(npars) :: pars_real
   pars_real = log_nor2par(npars, pars_norm1, parmin, parmax, paradj)
   ! expect values in bounds parmin, parmax
-  write(*,*) pars_real
   call check(error, all(pars_real>=parmin) .and. all(pars_real<=parmax))
 
 end subroutine 
