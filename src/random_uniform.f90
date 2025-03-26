@@ -67,7 +67,6 @@ module random_uniform
         call fill_random_uniform(this%u, this%length)
         this%index = 1
     endif
-    write(*,*) this%index
     x = this%u(this%index)
 
     ! update the index pointer

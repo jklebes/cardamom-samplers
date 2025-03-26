@@ -14,7 +14,7 @@ module DEMCz_module
    !  and DEMCzOPT - options, containing as many or few of the fields as needed, the rest default to the 
    !                 default values in type definiton here
    !  Create an object of type MCMC_OUTPUT to write reults to.
-   !  Create a double precision function loglikelihood taking a vector of n_pars (same as in PARINFO) parameters and 
+   !  Create a double precision function loglikelihood taking a vector of npars (same as in PARINFO) parameters and 
    !                 returning rel::loglikelihood.
    !  (not implemented yet) Optionally set OMP_NUM_THREADS
    !  Call subroutine DEMCz(fct, parinfo, demczopt, mcmcout) 
@@ -36,7 +36,7 @@ module DEMCz_module
    !> contains default values 
    type DEMCzOPT
       integer:: MAXITER  ! overall steps, if convergence not reached
-      integer:: n_steps  ! steps per independent sampling period
+      integer:: nadapt  ! steps per independent sampling period
       integer:: N_chains  ! consider setting OMP env to something compatible
       double precision:: differential_weight = 0.8  ! differential weight gamma, [0, 2]
       double precision:: crossover_probability = 0.9  ! crossover probability CR, [0, 1]
@@ -121,10 +121,10 @@ contains
       ! Extract from types ...
       differential_weight=MCO%differential_weight
 
-      npars = PI%n_pars
+      npars = PI%npars
       nchains = MCO%N_chains
       MAXITER = MCO%MAXITER
-      Ksteps = MCO%n_steps
+      Ksteps = MCO%nadapt
 
       ! Allocate arrays
 
@@ -140,7 +140,7 @@ contains
 
       !!! Initial state
 
-!$    OMP PARALLEL DO
+!$OMP PARALLEL DO
       do j = 1, nchains
          ! choose initial values
          ! TODO better function for initial state : latin square
@@ -154,7 +154,7 @@ contains
          ! write first values to history matrix
          PARS_history(:,j) = PARS_current(:,j)
       end do
-!$    OMP END PARALLEL DO
+!$OMP END PARALLEL DO
 
       len_history = len_history+nchains
 
@@ -163,7 +163,7 @@ contains
       do i = 2, MAXITER
 
          ! evolve each chain independently for nsteps (nsteps=K in ter Braak & Vrugt)
-!$       OMP PARALLEL DO
+!$OMP PARALLEL DO
          do j = 1, nchains
             do k = 1, Ksteps
                call step_chain(PARS_current(:, j), l0(j), model_likelihood, & 
@@ -172,7 +172,7 @@ contains
             ! write the chain's state after nsteps to Z
             PARS_history(:,len_history+j) = PARS_current(:,i)
          end do
-!$       OMP END PARALLEL DO !!Barrier implicit ?
+!$OMP END PARALLEL DO !!Barrier implicit ?
 
 
          ! increment length M (filled so far) of Z

@@ -5,6 +5,7 @@ project(cardamom-samplers VERSION 0.0.1
   LANGUAGES Fortran)
 enable_language(Fortran)
 
+
 set(PROJECT_NAME cardamom-samplers)
 
 add_subdirectory(src)

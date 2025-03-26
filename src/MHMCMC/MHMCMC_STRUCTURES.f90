@@ -61,7 +61,7 @@ module MCMCOPT
     ! further metrics could be added here
     integer:: nos_iterations
     double precision:: acceptance_rate
-    double precision, allocatable, dimension(:):: best_pars  ! store current best parameter set
+    double precision, allocatable, dimension(:):: bestpars  ! store current best parameter set
   end type  ! MCMC_OUTPUT
   ! create output type
   type(MCMC_OUTPUT), save:: MCOUT
@@ -88,7 +88,7 @@ module MCMCOPT
     logical:: cov = .false., use_multivariate = .false.
     double precision, allocatable, dimension(:,:):: covariance, & ! parameter covariance matrix
                                                              iC    ! inverse covariance matrix
-    double precision, allocatable, dimension(:):: mean_par & ! mean parameter value
+    double precision, allocatable, dimension(:):: meanpar & ! mean parameter value
                                                   ,parmax   & ! maximum parameter values
                                                   ,parmin   & ! minimum parameter values
                                                   ,parini   & ! initial parameter values
@@ -127,12 +127,12 @@ module MCMCOPT
     implicit none
 
     ! define dimensions for output structure
-    allocate(MCOUT%best_pars(PI%npars))
+    allocate(MCOUT%bestpars(PI%npars))
 
     ! set to zero, will become 1 when MCMCM complete
     MCOUT%complete = 0
     ! and clear initial memory
-    MCOUT%best_pars = 0d0
+    MCOUT%bestpars = 0d0
 
   end subroutine initialise_mcmc_output
   !

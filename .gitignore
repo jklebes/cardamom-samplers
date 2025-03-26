@@ -3,6 +3,7 @@
 # **/MHMCMC*
 **/main.f90
 math.f90
+test/cardamom/
 
 # Prerequisites
 *.d

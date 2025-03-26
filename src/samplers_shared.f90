@@ -1,16 +1,17 @@
 module samplers_shared
 
 !> A collection of info about the model's parameters
-!> n_pars and min, max bounds as two arrays
+!> npars and min, max bounds as two arrays
 !> Closely related to model fct; model fct must take this number 
 !> and type of paramters
 !> Unlike in previous versions, intended to be intent(in) only
 !> TODO we could bundle this in a type with the function:
 !> the fortran quasi-object
 type PARINFO
-integer:: n_pars
+integer:: npars
 double precision, allocatable, dimension(:):: parmin, parmax, paradj
 logical, allocatable, dimension(:):: fix_pars
+logical, allocatable, dimension(:):: parfix 
 end type PARINFO
 
 
@@ -19,14 +20,13 @@ contains
 
 !! utilities
 
-pure logical function is_infinity(ll) 
+logical function is_infinity(ll) 
 !! Check whether a loglikelihood is infinity/likelihood is zero 
 !! usually signalling hard reject of the state due to boundary conditions and physical constraints
 double precision, intent(in):: ll
 double precision:: l
 ! undo the log 
-l = exp(ll)
-is_infinity = ( abs(l) <= tiny )  ! check approx zero 
+is_infinity = ( ll <= log(epsilon) )  ! check approx zero 
 end function
 
 !! core sampler math
@@ -35,7 +35,7 @@ end function
 !> First argument is new/proposed log(!)likelihood, 
 !> second is old log likelihood
 !> return logical 
-logical function metropolis_choice(new_loglikelihood, old_loglikelihood)  ! Really should be in or shared with MCMC
+logical function metropolis_choice(new_loglikelihood, old_loglikelihood) 
 double precision, intent(in):: new_loglikelihood, old_loglikelihood   
 double precision:: r  ! draw random number 0 to 1
 call random_number(r)
@@ -48,16 +48,14 @@ end function
 
 subroutine init_pars_random(PI, pars0, fix_pars_flag, uniform_random_vector)
     use random_uniform, only : UNIF_VECTOR, next_random_uniform
-    use math_functions, only :  log_nor2par_scalar
+    use samplers_math, only :  log_nor2par_scalar
     implicit none
     type(PARINFO), intent(in):: PI  ! give number, bounds of params
-    double precision, dimension(PI%n_pars), intent(inout):: pars0  ! return random initial values-nonnormalized
-    logical, dimension(PI%n_pars), optional, intent(in):: fix_pars_flag  ! flags .true. to keep inidividual pars
-    logical, dimension(PI%n_pars) :: fix_pars_flag_  ! internal version
-    type(UNIF_VECTOR), optional:: uniform_random_vector  ! object supplying pre-generated randoms 0 to 1 !TODO make optional
+    double precision, dimension(PI%npars), intent(inout):: pars0  ! return random initial values-nonnormalized
+    logical, dimension(PI%npars), optional, intent(in):: fix_pars_flag  ! flags .true. to keep inidividual pars
+    logical, dimension(PI%npars):: fix_pars_flag_  ! internal version
+    type(UNIF_VECTOR), optional:: uniform_random_vector  ! object supplying pre-generated randoms 0 to 1  ! TODO make optional
     integer:: i
-
-    ! TODO check for need to generate random numbers vector
 
     if (.not. (present(fix_pars_flag) )) then
         fix_pars_flag_ = .false.
@@ -65,7 +63,7 @@ subroutine init_pars_random(PI, pars0, fix_pars_flag, uniform_random_vector)
       fix_pars_flag_ = fix_pars_flag
     endif
 
-    do i = 1, PI%n_pars
+    do i = 1, PI%npars
        ! parfix = 1 stay at prior value, parfix = 0 randomly search
         ! TODO condense this horrible logic to restart and fix_pars_flag somewhere outside of this fct
        !if (MCO%fixedpars .and. PI%parini(i) /= -9999d0) PI%parfix(i) = 1d0
@@ -76,7 +74,7 @@ subroutine init_pars_random(PI, pars0, fix_pars_flag, uniform_random_vector)
         if (.not. (fix_pars_flag_(i) )) then
             ! make sure to give it a random number vector unique to the chain
             ! scale each to the parameter's range
-            pars0(i) = log_nor2par_scalar(uniform_random_vector%next_random_uniform(), PI%parmin(i), PI%parmax(i), PI%paradj(i))
+           pars0(i) = log_nor2par_scalar(uniform_random_vector%next_random_uniform(), PI%parmin(i), PI%parmax(i), PI%paradj(i))
        end if
 
     end do  ! for PI%npar loop
@@ -85,12 +83,12 @@ subroutine init_pars_random(PI, pars0, fix_pars_flag, uniform_random_vector)
   end subroutine 
 
   subroutine init_latin_square(PI, pars0, n_chains)  ! TODO 
-    use math_functions, only: nor2par_scalar
+    use samplers_math, only: nor2par_scalar
     implicit none
     type(PARINFO), intent(in):: PI  ! give number, bounds, and potentially current value of params
     integer, intent(in):: n_chains
-    double precision, dimension(PI%n_pars, n_chains), intent(out):: pars0  ! return initial values-nonnormalized
-    double precision, dimension(PI%n_pars, n_chains):: points 
+    double precision, dimension(PI%npars, n_chains), intent(out):: pars0  ! return initial values-nonnormalized
+    double precision, dimension(PI%npars, n_chains):: points 
     integer:: i, j
     ! generate N initial points on the (0..1)^N space in latin hypercube distribution... 
     ! Must be run for all chains at once outside of parallel regions
@@ -98,7 +96,7 @@ subroutine init_pars_random(PI, pars0, fix_pars_flag, uniform_random_vector)
 
     ! convert to real parameter values space
     do j = 1, n_chains
-        do i = 1, PI%n_pars
+        do i = 1, PI%npars
             pars0(i, j) = nor2par_scalar( points(i, j), PI%parmin(i), PI%parmax(i))
         end do
     end do

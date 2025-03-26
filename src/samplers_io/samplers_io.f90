@@ -1,5 +1,5 @@
 
-module cardamom_io
+module samplers_io
 
   !!!!!!!!!!!
   !
@@ -37,6 +37,7 @@ module cardamom_io
 
 
   ! declare module level variables
+  ! TODO problem for parallel file writing !
   integer:: pfile_unit = 10, sfile_unit = 11, cfile_unit = 12, cifile_unit = 13, ifile_unit = 14
   ! default assumption is that this is not a restart fun
   logical:: restart_flag = .false.
@@ -48,7 +49,7 @@ module cardamom_io
     integer:: io_buffer, io_buffer_count
     double precision, allocatable, dimension(:,:) :: &
                                     variance_buffer, &
-                                   mean_pars_buffer, &
+                                   meanpars_buffer, &
                                         pars_buffer
 
     double precision, allocatable, dimension(:) :: &
@@ -185,20 +186,20 @@ module cardamom_io
 
   end subroutine open_output_files
 
-  subroutine initialize_buffers(npars, n_write_events, io_space)
-    integer, intent(in):: npars, n_write_events
+  subroutine initialize_buffers(npars, nwrite_events, io_space)
+    integer, intent(in):: npars, nwrite_events
     type(io_buffer_space), intent(inout):: io_space
     ! TODO oops each chain needs its own buffer obeject and file streams
     ! also initialize buffers
     ! TODO move because not fitting function name
    ! Initialise counters used to track the output of parameter sets
     io_space%io_buffer_count = 0 
-    io_space%io_buffer = min(1000, max(10, n_write_events/10))
+    io_space%io_buffer = min(1000, max(10, nwrite_events/10))
    
     ! Allocate variables used in io buffering, 
     ! these could probably be moved to a more sensible place within cardamom_io.f90
     allocate(io_space%variance_buffer(npars, io_space%io_buffer), &
-             io_space%mean_pars_buffer(npars, io_space%io_buffer), &
+             io_space%meanpars_buffer(npars, io_space%io_buffer), &
              io_space%pars_buffer(npars, io_space%io_buffer), &
              io_space%prob_buffer(io_space%io_buffer), &
              io_space%nsample_buffer(io_space%io_buffer), &
@@ -239,6 +240,8 @@ module cardamom_io
     ! write out the file. Its binary format has already been determined at the
     ! openning of the file
 
+    write(*,*) "irec", irec
+
     do i = 1, npars
        do j = 1, npars
           irec = irec+1
@@ -252,7 +255,7 @@ module cardamom_io
   !
   !------------------------------------------------------------------
   !
-  subroutine write_covariance_info(mean_pars, nsample, npars)
+  subroutine write_covariance_info(meanpars, nsample, npars)
 
     ! subroutine writes MCMC accepted parameters and step values to binary files
 
@@ -261,7 +264,7 @@ module cardamom_io
     ! arguments
     integer, intent(in):: npars
     double precision, intent(in):: nsample
-    double precision, dimension(npars), intent(in):: mean_pars
+    double precision, dimension(npars), intent(in):: meanpars
 
     ! declare local variables
     integer:: i, j
@@ -270,7 +273,7 @@ module cardamom_io
     ! openning of the file
 
     do i = 1, npars
-       write(cifile_unit) mean_pars(i)
+       write(cifile_unit) meanpars(i)
     end do
 
     write(cifile_unit) nsample
@@ -345,13 +348,13 @@ module cardamom_io
   !--------------------------------------------------------------------
   !
   subroutine write_mcmc_output(variance, accept_rate, &
-                               covariance, mean_pars, nsample, &
+                               covariance, meanpars, nsample, &
                                pars, prob, npars, dump_now, io_space)
 
     ! Arguments
     integer, intent(in):: npars
     double precision, dimension(npars, npars), intent(in):: covariance
-    double precision, dimension(npars), intent(in):: mean_pars, &
+    double precision, dimension(npars), intent(in):: meanpars, &
                                                        variance, &
                                                            pars
     double precision, intent(in):: nsample, accept_rate, prob
@@ -366,10 +369,11 @@ module cardamom_io
 
     ! Increment buffer
     io_space%io_buffer_count = io_space%io_buffer_count+1
-
+    write(*,*) "buffer count" , io_space%io_buffer_count
+    write (*,*) "vairance", variance
     ! Store information in buffer for later writing
     io_space%variance_buffer(1:npars, io_space%io_buffer_count) = variance
-    io_space%mean_pars_buffer(1:npars, io_space%io_buffer_count) = mean_pars
+    io_space%meanpars_buffer(1:npars, io_space%io_buffer_count) = meanpars
     io_space%pars_buffer(1:npars, io_space%io_buffer_count) = pars
     io_space%prob_buffer(io_space%io_buffer_count) = prob
     io_space%nsample_buffer(io_space%io_buffer_count) = nsample
@@ -383,7 +387,7 @@ module cardamom_io
         call write_covariance_matrix(covariance, npars, .false.)
         ! Everything else loop through the buffered output to write out
         do i = 1, io_space%io_buffer_count
-           call write_covariance_info(io_space%mean_pars_buffer(:,i), io_space%nsample_buffer(i), npars)
+           call write_covariance_info(io_space%meanpars_buffer(:,i), io_space%nsample_buffer(i), npars)
            call write_variances(io_space%variance_buffer(:,i), npars, io_space%accept_rate_buffer(i))
            call write_parameters(io_space%pars_buffer(:,i), io_space%prob_buffer(i), npars)
         end do
@@ -400,4 +404,4 @@ module cardamom_io
   !
   !--------------------------------------------------------------------
   !
-end module cardamom_io
+end module samplers_io
