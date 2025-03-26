@@ -7,15 +7,15 @@ module DEMCz_module
    !
    ! On normalized parameters: 
    ! All calculation, statistics, and writing is done on "raw" values, 
-   ! NOT parameters normalized to (0,1).  
+   ! NOT parameters normalized to (0, 1).  
    !
    ! How to use:
    !  Create an object of type PARINFO : number and bounds of parameters 
-   !  and DEMCzOPT - options, containing as many or few of the fields as needed, the rest default to the 
+   !  and DEMCzOPT-options, containing as many or few of the fields as needed, the rest default to the 
    !                 default values in type definiton here
    !  Create an object of type MCMC_OUTPUT to write reults to.
    !  Create a double precision function loglikelihood taking a vector of npars (same as in PARINFO) parameters and 
-   !                 returning rel::loglikelihood.
+   !                 returning rel:: loglikelihood.
    !  (not implemented yet) Optionally set OMP_NUM_THREADS
    !  Call subroutine DEMCz(fct, parinfo, demczopt, mcmcout) 
    !!!!
@@ -30,7 +30,7 @@ module DEMCz_module
    ! TODO add file writing
 
    !> Settings for this run, as module data
-   double precision :: differential_weight
+   double precision:: differential_weight
 
    !> A collection of input options to the DEMCz sampler run
    !> contains default values 
@@ -70,21 +70,21 @@ contains
       type(DEMCzOPT), intent(in):: MCO
       type(MCMC_OUTPUT), intent(out):: MCOUT
 
-      ! the function to minimize ! TODO change name to loglikelihood everywehere
+      ! the function to minimize  ! TODO change name to loglikelihood everywehere
       interface
     subroutine model_likelihood(param_vector, n, ML)
          implicit none
-         double precision, dimension(:), intent(in):: param_vector
-         integer, intent(in) :: n
-         double precision , intent(out):: ML
+         double precision, dimension(n), intent(inout):: param_vector
+         integer, intent(in):: n
+         double precision, intent(out):: ML
     end subroutine model_likelihood
     end interface
       
-      ! optionally give a second function with same shape as model_likelihood , 
-      ! for writing to file;
-      procedure(model_likelihood), optional :: model_likelihood_write_in
+      ! optionally give a second function with same shape as model_likelihood, 
+      ! for writing to file; 
+      procedure(model_likelihood), optional:: model_likelihood_write_in
       ! Going forwards this pointer is the alternateive likelihood function for writing to file
-      procedure(model_likelihood), pointer :: model_likelihood_write
+      procedure(model_likelihood), pointer:: model_likelihood_write
 
       !> Matrix X, (npars x nchains), holding current state of the n chains
       double precision, allocatable, dimension(:,:):: PARS_current 
@@ -94,12 +94,12 @@ contains
       double precision, allocatable, dimension(:):: l_best
       double precision, allocatable, dimension(:,:):: PARS_best 
  
-      !> history Matrix Z, (npars x (nchains * maxiter))
+      !> history Matrix Z, (npars x (nchains*maxiter))
       double precision, allocatable, dimension(:,:):: PARS_history
 
       
-      integer:: npars, nchains, MAXITER , Ksteps
-      integer:: i, j, k, len_history ! counters
+      integer:: npars, nchains, MAXITER, Ksteps
+      integer:: i, j, k, len_history  ! counters
 
       ! Argument processing  !!!!!!!!!!!!!!!
       ! Set functions ...
@@ -108,18 +108,18 @@ contains
          ! if second function given use it for writing to file
          model_likelihood_write => model_likelihood_write_in
       else
-         ! default , if no argument given: use same function for calculation and printing
+         ! default, if no argument given: use same function for calculation and printing
          model_likelihood_write => model_likelihood
       end if
  
       ! TODO check the function(s) take npars arguments !
 
-      ! wrap the model loglikelihood function , which takes raw parameter values, in a new function
+      ! wrap the model loglikelihood function, which takes raw parameter values, in a new function
       ! which takes normalized values
 
 
       ! Extract from types ...
-      differential_weight=MCO%differential_weight
+      differential_weight = MCO%differential_weight
 
       npars = PI%npars
       nchains = MCO%N_chains
@@ -162,7 +162,7 @@ contains
 
       do i = 2, MAXITER
 
-         ! evolve each chain independently for nsteps (nsteps=K in ter Braak & Vrugt)
+         ! evolve each chain independently for nsteps (nsteps = K in ter Braak & Vrugt)
 !$OMP PARALLEL DO
          do j = 1, nchains
             do k = 1, Ksteps
@@ -195,9 +195,9 @@ contains
    !> Works with normalized values : returns a number between 0 and 1
    !> For each parameter
    subroutine init_random(npars, norpars)
-      integer , intent(in) :: npars
+      integer, intent(in):: npars
       double precision, dimension(:), intent(out):: norpars
-      integer :: i
+      integer:: i
       do i = 1, npars
          call random_number(norpars(i)) 
       end do
@@ -208,36 +208,36 @@ contains
    !> Evolve the state of one chain for 1 step
    subroutine step_chain(X_i, l0, model_likelihood, & 
       npars, PARS_history, len_history)
-     integer, intent(in):: npars ! number of pars
-    double precision, dimension(:), intent(inout):: X_i ! current state of the chain ; normalized values of all pars
+     integer, intent(in):: npars  ! number of pars
+    double precision, dimension(:), intent(inout):: X_i  ! current state of the chain; normalized values of all pars
     double precision, dimension(:), allocatable:: previous_vector, proposed_vector  ! internal: save previous state, proposed new state
     double precision, dimension(:,:), intent(in):: PARS_history  ! the matrix Z so far, to read 2 rows from
-    integer, intent(in) :: len_history ! length to which Z is filled
+    integer, intent(in):: len_history  ! length to which Z is filled
     double precision, intent(inout):: l0  ! likelihood of previous accepted params
     double precision             :: l  ! likelihood of proposed values
     
     integer:: R1, R2  ! indices of 2 random rows 
     double precision:: rand
-    integer:: i ! counters
+    integer:: i  ! counters
 
     ! the function, vector of normalized par values -> loglikelihood
 
     interface
     subroutine model_likelihood(param_vector, n, ML)
          implicit none
-         double precision, dimension(:), intent(in):: param_vector
-         integer, intent(in) :: n
-         double precision , intent(out):: ML
+         integer, intent(in):: n
+         double precision, dimension(n), intent(inout):: param_vector
+         double precision, intent(out):: ML
     end subroutine model_likelihood
     end interface
 
       R1 = random_int(len_history)
       R2 = random_int(len_history)  
-      do while(R1==R2) ! should not equal R1 ("without replacement")
+      do while(R1 == R2)  ! should not equal R1 ("without replacement")
          R2 = random_int(len_history) 
       end do
       previous_vector = X_i
-      call step(proposed_vector, previous_vector , PARS_history(R1, :), PARS_history(R2, :))
+      call step(proposed_vector, previous_vector, PARS_history(R1, :), PARS_history(R2, :))
       call model_likelihood(proposed_vector, npars, l)
       if (metropolis_choice(l, l0)) then  ! We should have this in MCMC common
          X_i = proposed_vector
@@ -251,7 +251,7 @@ contains
     double precision, dimension(:), intent(out):: vout
     double precision, dimension(:), intent(in):: v1, v2, v3
     ! get differential_weight, corssover_probability from module data
-      vout = v1+differential_weight*(v2-v3) ! TODO + noise e
+      vout = v1+differential_weight*(v2-v3)  ! TODO+noise e
    end subroutine
 
 

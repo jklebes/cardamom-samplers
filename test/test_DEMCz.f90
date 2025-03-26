@@ -7,7 +7,7 @@ module test_DEMCz
 
   public:: collect_DEMCztests
 
-  integer, parameter :: dp = kind(0.0d0)
+  integer, parameter:: dp = kind(0.0d0)
 
 contains
 
@@ -45,7 +45,7 @@ subroutine test_MCO(error)
   type(error_type), allocatable, intent(out):: error
   !Having imported DEMCz_module, we should have a type(DEMCzOpt) 
   ! and access a module-level object holding default options
-  type(DEMCzOPT) :: options
+  type(DEMCzOPT):: options
 end subroutine
 
 ! TODO move to common
@@ -56,7 +56,7 @@ subroutine test_random_int(error)
   integer:: r
   r = random_int(2)
   !! should choose from (1, 2) (inclusive)
-  call check(error, r == 1 .or. r==2)
+  call check(error, r == 1 .or. r == 2)
 end subroutine test_random_int
 
 subroutine test_metropolis_choice(error)
@@ -67,9 +67,9 @@ subroutine test_metropolis_choice(error)
     implicit none
     type(error_type), allocatable, intent(out):: error
     ! certain acceptance of state with probability 1 vs 0
-    call check(error, metropolis_choice(log(1.0_dp), log(1e-15_dp)),.true. )
+    call check(error, metropolis_choice(log(1.0_dp), log(1e-15_dp)), .true. )
     ! certain rejection of state with probability 0 vs 1
-    call check(error, metropolis_choice(log(1e-15_dp), log(1.0_dp)),.false. )
+    call check(error, metropolis_choice(log(1e-15_dp), log(1.0_dp)), .false. )
   
   end subroutine test_metropolis_choice
 
@@ -90,21 +90,21 @@ subroutine test_metropolis_stochastic(error)
     use DEMCz_module, only: metropolis_choice
     implicit none
     type(error_type), allocatable, intent(out):: error
-    double precision :: new_loglikelihood, old_loglikelihood, accept_ratio
-    integer :: i, N, accept_count
+    double precision:: new_loglikelihood, old_loglikelihood, accept_ratio
+    integer:: i, N, accept_count
     ! Something with a likelihood l1 = 1/2 l2 should be acceped
     ! 50% of the time.  
     new_loglikelihood = log(.3) 
     old_loglikelihood = log(.6)
     ! get acceptance N times  - expect about 50% true 
-    N= 500
+    N = 500
     accept_count = 0
-    do i=1, N
+    do i = 1, N
       if (metropolis_choice(new_loglikelihood, old_loglikelihood)) then
-        accept_count = accept_count +1 
+        accept_count = accept_count+1 
       end if 
     end do
-    accept_ratio  = accept_count / real(N)
+    accept_ratio  = accept_count/real(N)
     write (*,*) accept_count
     write (*,*) accept_ratio
 
@@ -116,17 +116,17 @@ subroutine test_metropolis_stochastic(error)
     implicit none
     type(error_type), allocatable, intent(out):: error
     ! test the main DEMCz function just runs when given a function
-    ! it returns / modifies no info ; it writes to file
+    ! it returns/modifies no info; it writes to file
 
-    type(PARINFO) :: PI
-    type(DEMCzOPT) :: options
-    type(MCMC_OUTPUT) :: DEMCzOUT 
+    type(PARINFO):: PI
+    type(DEMCzOPT):: options
+    type(MCMC_OUTPUT):: DEMCzOUT 
 
 
    
     ! single chain
-    options%n_steps = 100
-    options%MAXITER =1000
+    options%nadapt = 100
+    options%MAXITER = 1000
     options%N_chains = 1
     options%differential_weight = 0.8
 

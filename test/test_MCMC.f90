@@ -63,14 +63,14 @@ subroutine test_step_pars_real(error)
   type(error_type), allocatable, intent(out):: error
   ! generate new proposal PARS given current point PARS0 and other specs
   ! example point x, y = 0, 0 with independent variances
-  double precision, dimension(PI_xy%n_pars):: pars0, pars
+  double precision, dimension(PI_xy%npars):: pars0, pars
   logical:: multivariate = .true.
-  double precision, dimension(PI_xy%n_pars, PI_xy%n_pars):: covariance
+  double precision, dimension(PI_xy%npars, PI_xy%npars):: covariance
   double precision:: beta = 0.05d0  ! recommended constant, only relevant in multivariate phase
   double precision:: opt_scaling  ! recommended constant 
   double precision:: par_minstepsize = 0.001d0 ! ?? what does this do ?
   type(UNIF_VECTOR):: random_uniform
-  opt_scaling = 5.67/dble(PI_xy%n_pars)
+  opt_scaling = 5.67/dble(PI_xy%npars)
   call random_uniform%initialize()
   call init_PI()
   pars0 = (/0d0, 3.0d0/)  ! within bounds of PI_xy
@@ -136,7 +136,7 @@ subroutine test_run_mcmc_len0(error)
   call run_mcmc(ll_normal, pi_xy, mcopt, mcout)
   ! expect values in mcout : a random initial state (within given parameter bounds) 
   ! and its loglikelihood
-  ! call check(error, mcout%ll > 0d0 , .true. )
+  ! call check(error, mcout%ll > 0d0, .true. )
   write(*,*) mcout%ll, mcout%pars
   call check(error, mcout%pars(1) >= pi_xy%parmin(1) .and. mcout%pars(1) <= pi_xy%parmax(1))
   call check(error, mcout%pars(2) >= pi_xy%parmin(2) .and. mcout%pars(2) <= pi_xy%parmax(2) )
@@ -172,10 +172,10 @@ end subroutine
 
 subroutine test_run_parallel_mcmc_nchains1_len0(error)
   implicit none
-  integer, parameter :: nchains =1
+  integer, parameter:: nchains = 1
   type(error_type), allocatable, intent(out):: error
-  type(mcmc_output), dimension(:), allocatable :: mcout
-  type(mcmc_output) :: mcout1
+  type(mcmc_output), dimension(:), allocatable:: mcout
+  type(mcmc_output):: mcout1
   type(mcmc_options):: mcopt  ! filled with defaults only
   ! zero length run : takes expected input arguments, setup works, 
   ! outputs/writes unchanged state
@@ -192,21 +192,21 @@ end subroutine
 
 subroutine test_run_parallel_mcmc_nchains4_len0(error)
   implicit none
-  integer, parameter :: nchains = 4
+  integer, parameter:: nchains = 4
   type(error_type), allocatable, intent(out):: error
-  type(mcmc_output), dimension(:), allocatable :: mcout
-  type(mcmc_output) :: mcout1
+  type(mcmc_output), dimension(:), allocatable:: mcout
+  type(mcmc_output):: mcout1
   type(mcmc_options):: mcopt  ! filled with defaults only
-  integer :: i
+  integer:: i
   ! zero length run : takes expected input arguments, setup works, 
   ! outputs/writes unchanged state
   ! all on defaults, without optional arguments
   call init_pi()
   mcopt%maxiter = 0
-  call run_parallel_mcmc(ll_normal, pi_xy, mcopt, mcout, nchains=nchains)
+  call run_parallel_mcmc(ll_normal, pi_xy, mcopt, mcout, nchains = nchains)
   ! expect values in mcout : a random initial state (within given parameter bounds) 
   ! and its loglikelihood
-  do i=1, nchains
+  do i = 1, nchains
     mcout1 = mcout(i)
     write(*,*) i, mcout1%pars(1), mcout1%pars(2)
     call check(error, mcout1%pars(1) >= pi_xy%parmin(1) .and. mcout1%pars(1) <= pi_xy%parmax(1))
@@ -217,12 +217,12 @@ end subroutine
 
 subroutine test_run_parallel_mcmc_nchains4_enforceomp_len0(error)
   implicit none
-  integer, parameter :: nchains = 4
+  integer, parameter:: nchains = 4
   type(error_type), allocatable, intent(out):: error
-  type(mcmc_output), dimension(:), allocatable :: mcout
+  type(mcmc_output), dimension(:), allocatable:: mcout
   type(mcmc_options):: mcopt  ! filled with defaults only
-  type(mcmc_output) :: mcout1
-  integer :: i
+  type(mcmc_output):: mcout1
+  integer:: i
   ! zero length run : takes expected input arguments, setup works, 
   ! outputs/writes unchanged state
   ! all on defaults, without optional arguments
@@ -232,7 +232,7 @@ subroutine test_run_parallel_mcmc_nchains4_enforceomp_len0(error)
   call run_parallel_mcmc(ll_normal, pi_xy, mcopt, mcout, nchains = nchains)
   ! expect values in mcout : a random initial state (within given parameter bounds) 
   ! and its loglikelihood
-  do i=1, nchains
+  do i = 1, nchains
     mcout1 = mcout(i)
     write(*,*) i, mcout1%pars(1), mcout1%pars(2)
     call check(error, mcout1%pars(1) >= pi_xy%parmin(1) .and. mcout1%pars(1) <= pi_xy%parmax(1))
@@ -251,20 +251,20 @@ subroutine test_run_parallel_mcmc_len1000(error)
   ! Expect x and y close to true values were found
   ! and best loglik is close to 0
   ! TODO "is close"  helper
-  call check(error, MCOUT%pars(1), x_ideal )
-  call check(error, MCOUT%pars(2), y_ideal)
-  call check(error, MCOUT%ll, 0.0 )
+  call check(error, MCOUT%pars(1)== x_ideal )
+  call check(error, MCOUT%pars(2)== y_ideal)
+  call check(error, MCOUT%ll == 0.0 )
   ! This is an easy problem, expect convergence was reached long before MAXITER.
 end subroutine
 
 subroutine test_run_parallel_mcmc_nchains4_enforceomp_len100000(error)
   implicit none
-  integer, parameter :: nchains = 4
+  integer, parameter:: nchains = 4
   type(error_type), allocatable, intent(out):: error
-  type(mcmc_output), dimension(:), allocatable :: mcout
+  type(mcmc_output), dimension(:), allocatable:: mcout
   type(mcmc_options):: mcopt  ! filled with defaults only
-  type(mcmc_output) :: mcout1
-  integer :: i
+  type(mcmc_output):: mcout1
+  integer:: i
   ! zero length run : takes expected input arguments, setup works, 
   ! outputs/writes unchanged state
   ! all on defaults, without optional arguments
@@ -274,7 +274,7 @@ subroutine test_run_parallel_mcmc_nchains4_enforceomp_len100000(error)
   call run_parallel_mcmc(ll_normal, pi_xy, mcopt, mcout, nchains = nchains)
   ! expect values in mcout : a random initial state (within given parameter bounds) 
   ! and its loglikelihood
-  do i=1, nchains
+  do i = 1, nchains
     mcout1 = mcout(i)
     call check(error, mcout1%pars(1) >= pi_xy%parmin(1) .and. mcout1%pars(1) <= pi_xy%parmax(1))
     call check(error, mcout1%pars(2) >= pi_xy%parmin(2) .and. mcout1%pars(2) <= pi_xy%parmax(2) )
@@ -283,8 +283,8 @@ subroutine test_run_parallel_mcmc_nchains4_enforceomp_len100000(error)
     call check(error, (abs(mcout1%pars(1) - x_ideal) > abs(mcout1%bestpars(1)-x_ideal)) &
     & .or.  (abs(mcout1%pars(2) - y_ideal) > abs(mcout1%bestpars(2)-y_ideal) ))
     ! outputs complete and nos_iterations
-    call check(error, mcout1%complete) ! expect .true.
-    call check(error, mcout1%nos_iterations, mcopt%maxiter) ! because no convergence checks implemented at the moment
+    call check(error, mcout1%complete)  ! expect .true.
+    call check(error, mcout1%nos_iterations, mcopt%maxiter)  ! because no convergence checks implemented at the moment
   end do 
 end subroutine 
 

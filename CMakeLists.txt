@@ -17,3 +17,8 @@ if(ENABLE_TESTING)
   enable_testing()
   add_subdirectory("test")
 endif()
+
+find_package(OpenMP)
+if(OpenMP_Fortran_FOUND)
+  target_link_libraries("${PROJECT_NAME}-lib" PUBLIC OpenMP::OpenMP_Fortran)
+endif()
